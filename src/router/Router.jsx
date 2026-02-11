@@ -62,6 +62,7 @@ const router = createBrowserRouter([
             </ProtectedRoute>
         ),
         children: [
+            { index: true, element: <Navigate to="dashboard" /> },
             { path: "dashboard", element: <AdminDashboard /> },
             { path: "users", element: <UsersModule /> },
             { path: "users/create", element: <AddUserPage /> },
@@ -95,6 +96,7 @@ const router = createBrowserRouter([
             </ProtectedRoute>
         ),
         children: [
+            { index: true, element: <Navigate to="dashboard" /> },
             { path: "dashboard", element: <StudentDashboard /> },
             // Section 13: "My Commitments" dashboard
             { path: "commitments", element: <div>My Commitments Dashboard</div> },
@@ -114,6 +116,7 @@ const router = createBrowserRouter([
             </ProtectedRoute>
         ),
         children: [
+            { index: true, element: <Navigate to="dashboard" /> },
             { path: "dashboard", element: <ApproverDashboard /> },
             { path: "groups/create", element: <GroupBuilderPage /> },
             { path: "surveys", element: <SurveysModule /> },

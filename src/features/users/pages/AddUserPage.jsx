@@ -1,50 +1,67 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from 'react-hot-toast';
+
+const API_BASE = "http://localhost:4000/api";
 
 const AddUserPage = () => {
     const navigate = useNavigate();
+    const [loading, setLoading] = useState(false);
 
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
     const [phone, setPhone] = useState("");
-    const [isActive, setIsActive] = useState(true);
     const [category, setCategory] = useState("");
     const [year, setYear] = useState("");
     const [section, setSection] = useState("");
     const [department, setDepartment] = useState("");
-    const [rank, setRank] = useState("");
-    const [score, setScore] = useState("");
-    const [attributes, setAttributes] = useState("{}");
+    const [role, setRole] = useState("USER");
 
     const inputClassName =
         "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none";
     const labelClassName = "text-xs font-medium text-gray-500";
 
-    const handleSubmit = (event) => {
+    const handleSubmit = async (event) => {
         event.preventDefault();
+        setLoading(true);
 
-        let parsedAttributes = attributes;
         try {
-            parsedAttributes = JSON.parse(attributes);
-        } catch {
-            parsedAttributes = attributes;
+            // Create user (role is automatically added to user_roles table)
+            const response = await fetch(`${API_BASE}/users`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name,
+                    email,
+                    password,
+                    phone: phone || null,
+                    category: category || null,
+                    year: year || null,
+                    section: section || null,
+                    department: department || null,
+                    role,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                toast.error(data.message || "Failed to create user");
+                setLoading(false);
+                return;
+            }
+
+            toast.success(data.message || "User created successfully");
+            navigate("/admin/users");
+        } catch (error) {
+            console.error("Error creating user:", error);
+            toast.error("An error occurred while creating user");
+        } finally {
+            setLoading(false);
         }
-
-        const payload = {
-            name,
-            email,
-            phone: phone || null,
-            is_active: isActive,
-            category,
-            year: year || null,
-            section: section || null,
-            department: department || null,
-            rank: rank ? Number(rank) : null,
-            score: score ? Number(score) : null,
-            attributes: parsedAttributes,
-        };
-
-        console.log("Create user", payload);
     };
 
     return (
@@ -62,17 +79,17 @@ const AddUserPage = () => {
                         Cancel
                     </button>
                     <button
-                        type="submit"
-                        form="add-user-form"
-                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium"
+                        onClick={handleSubmit}
+                        disabled={loading}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50"
                     >
-                        Save User
+                        {loading ? "Creating..." : "Create User"}
                     </button>
                 </div>
             </div>
 
             <div className="flex-1 overflow-hidden">
-                <form id="add-user-form" onSubmit={handleSubmit} className="h-full overflow-y-auto space-y-6 pr-2">
+                <form className="h-full overflow-y-auto space-y-6 pr-2">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
                         <h2 className="text-sm font-semibold text-gray-800">User Details</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -96,6 +113,30 @@ const AddUserPage = () => {
                                     placeholder="john@edu.com"
                                     required
                                 />
+                            </div>
+                            <div>
+                                <label className={labelClassName}>Password</label>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(event) => setPassword(event.target.value)}
+                                    className={inputClassName}
+                                    placeholder="Enter password"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className={labelClassName}>Role</label>
+                                <select
+                                    value={role}
+                                    onChange={(event) => setRole(event.target.value)}
+                                    className={inputClassName}
+                                    required
+                                >
+                                    <option value="USER">User</option>
+                                    <option value="ADMIN">Admin</option>
+                                    <option value="APPROVER">Approver</option>
+                                </select>
                             </div>
                             <div>
                                 <label className={labelClassName}>Phone</label>
@@ -140,47 +181,6 @@ const AddUserPage = () => {
                                     onChange={(event) => setDepartment(event.target.value)}
                                     className={inputClassName}
                                     placeholder="CSE"
-                                />
-                            </div>
-                            <div>
-                                <label className={labelClassName}>Rank</label>
-                                <input
-                                    type="number"
-                                    value={rank}
-                                    onChange={(event) => setRank(event.target.value)}
-                                    className={inputClassName}
-                                    placeholder="Optional"
-                                />
-                            </div>
-                            <div>
-                                <label className={labelClassName}>Score</label>
-                                <input
-                                    type="number"
-                                    value={score}
-                                    onChange={(event) => setScore(event.target.value)}
-                                    className={inputClassName}
-                                    placeholder="Optional"
-                                />
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className={labelClassName}>Attributes (JSON)</label>
-                                <textarea
-                                    value={attributes}
-                                    onChange={(event) => setAttributes(event.target.value)}
-                                    className={inputClassName}
-                                    rows="3"
-                                    placeholder='{"tag":"value"}'
-                                />
-                            </div>
-                            <div className="md:col-span-2 flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
-                                <div>
-                                    <div className="text-sm font-medium text-gray-900">Active</div>
-                                    <div className="text-xs text-gray-500">Toggle user access</div>
-                                </div>
-                                <input
-                                    type="checkbox"
-                                    checked={isActive}
-                                    onChange={(event) => setIsActive(event.target.checked)}
                                 />
                             </div>
                         </div>
