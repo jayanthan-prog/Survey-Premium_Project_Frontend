@@ -11,7 +11,7 @@ export const ADMIN_NAV_LINKS = [
     { name: "Surveys", path: "/admin/surveys", icon: ClipboardList },
     { name: "Releases", path: "/admin/releases", icon: Send },
     { name: "Approvals", path: "/admin/approvals", icon: CheckSquare },
-    { name: "Documents", path: "/admin/documents", icon: FileText },
+    // { name: "Documents", path: "/admin/documents", icon: FileText },
     { name: "Allocation", path: "/admin/allocation", icon: BarChart3 },
     { name: "Calendar", path: "/admin/calendar", icon: Calendar },
     { name: "Action Plans", path: "/admin/action-plans", icon: Map },

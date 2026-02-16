@@ -16,7 +16,7 @@ export const ActionPlansModule = () => {
     const statusClass = {
         Draft: "bg-gray-100 text-gray-700",
         "In Review": "bg-amber-100 text-amber-700",
-        Active: "bg-blue-100 text-blue-700",
+        Active: "bg-purple-100 text-purple-700",
         Completed: "bg-green-100 text-green-700",
     };
 
@@ -28,7 +28,7 @@ export const ActionPlansModule = () => {
                     <p className="text-sm text-gray-500">Track mitigation tasks, owners, and deadlines.</p>
                 </div>
                 <div className="flex gap-2">
-                    <button className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">New Plan</button>
+                    <button className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700">New Plan</button>
                     <button className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50">Export</button>
                 </div>
             </div>
@@ -45,7 +45,7 @@ export const ActionPlansModule = () => {
             <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 border-b border-gray-50">
                     <h2 className="text-sm font-semibold text-gray-800">Priority Actions</h2>
-                    <button className="text-sm text-blue-600 hover:underline">View all</button>
+                    <button className="text-sm text-purple-600 hover:underline">View all</button>
                 </div>
                 <table className="w-full text-left text-sm">
                     <thead className="bg-gray-50 text-gray-500 text-[11px] uppercase tracking-wider">

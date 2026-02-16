@@ -7,7 +7,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
             <div className="flex flex-col h-full">
                 {/* Branding */}
                 <div className="p-4 border-b border-slate-800">
-                    <h1 className="text-xl font-bold text-white tracking-tight">REDEFINED</h1>
+                    <h1 className="text-xl font-bold text-white tracking-tight">Survey Me</h1>
                 </div>
 
                 {/* Navigation */}

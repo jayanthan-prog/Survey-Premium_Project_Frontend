@@ -22,6 +22,9 @@ import ApprovalsModule from "../features/approvals/ApprovalsModule";
 import DocumentsModule from "../features/documents/DocumentsModule";
 import AllocationModule from "../features/allocation/AllocationModule";
 import CalendarModule from "../features/calendar/CalendarModule";
+import DocumentAddPage from "../features/documents/pages/DocumentAddPage";
+import DocumentViewPage from "../features/documents/pages/DocumentViewPage";
+import AllocationAddPage from "../features/allocation/pages/AllocationAddPage";
 import { ActionPlansModule } from "../features/action-plans/ActionPlansModule";
 import AnalyticsModule from "../features/analytics/AnalyticsModule";
 import AuditLogsModule from "../features/audit-logs/AuditLogsModule";
@@ -76,6 +79,9 @@ const router = createBrowserRouter([
             { path: "approvals", element: <ApprovalsModule /> },
             { path: "documents", element: <DocumentsModule /> },
             { path: "allocation", element: <AllocationModule /> },
+            { path: "allocation/create", element: <AllocationAddPage /> },
+            { path: "documents/create", element: <DocumentAddPage /> },
+            { path: "documents/:id", element: <DocumentViewPage /> },
             { path: "calendar", element: <CalendarModule /> },
             { path: "action-plans", element: <ActionPlansModule /> },
             { path: "analytics", element: <AnalyticsModule /> },
