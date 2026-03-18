@@ -1,174 +1,168 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 
+const BUILDER_AUTOSAVE_KEY = "surveyBuilderDraft.v2";
+
+const typeLabel = (value) => String(value || "short_text").replaceAll("_", " ");
+
+const renderPlaceholder = (question) => {
+    if (question.type === "long_text") {
+        return <div className="mt-2 h-24 rounded-lg border border-dashed border-slate-300" />;
+    }
+
+    if (["single_choice", "multiple_choice", "dropdown"].includes(question.type)) {
+        return (
+            <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                {(question.options || []).map((option, index) => (
+                    <li key={`${question.id}-${index}`} className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-sky-500" />
+                        {option}
+                    </li>
+                ))}
+            </ul>
+        );
+    }
+
+    if (question.type === "rating") {
+        return (
+            <div className="mt-2 text-sm text-slate-600">
+                Scale from {question.scaleMin || 1} to {question.scaleMax || 5}
+            </div>
+        );
+    }
+
+    if (question.type === "date") {
+        return <div className="mt-2 h-10 w-56 rounded-lg border border-dashed border-slate-300" />;
+    }
+
+    if (question.type === "number") {
+        return <div className="mt-2 h-10 w-40 rounded-lg border border-dashed border-slate-300" />;
+    }
+
+    if (question.type === "file_upload") {
+        return <div className="mt-2 h-16 rounded-lg border border-dashed border-slate-300 bg-slate-50" />;
+    }
+
+    if (question.type === "matrix") {
+        return (
+            <div className="mt-3 overflow-x-auto">
+                <table className="min-w-full border-collapse text-xs text-slate-700">
+                    <thead>
+                        <tr>
+                            <th className="border border-slate-200 bg-slate-50 p-2 text-left">Row / Column</th>
+                            {(question.columns || []).map((column, index) => (
+                                <th key={`${question.id}-column-${index}`} className="border border-slate-200 bg-slate-50 p-2 text-left">
+                                    {column}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {(question.rows || []).map((row, rowIndex) => (
+                            <tr key={`${question.id}-row-${rowIndex}`}>
+                                <td className="border border-slate-200 p-2 font-medium">{row}</td>
+                                {(question.columns || []).map((_, colIndex) => (
+                                    <td key={`${question.id}-${rowIndex}-${colIndex}`} className="border border-slate-200 p-2">
+                                        <div className="h-4 w-4 rounded border border-slate-300" />
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    }
+
+    return <div className="mt-2 h-10 rounded-lg border border-dashed border-slate-300" />;
+};
+
 const SurveyPreviewPage = () => {
+    const location = useLocation();
     const navigate = useNavigate();
     const { user } = useAuth();
 
-    const basePath = useMemo(
-        () => (user?.role === "APPROVER" ? "/approver/surveys" : "/admin/surveys"),
-        [user]
-    );
+    const roleBasePath = user?.role === "APPROVER" ? "/approver" : "/admin";
 
     const draft = useMemo(() => {
-        const raw = localStorage.getItem("surveyDraft");
-        return raw ? JSON.parse(raw) : null;
-    }, []);
+        if (location.state?.draft) return location.state.draft;
+
+        try {
+            const raw = localStorage.getItem(BUILDER_AUTOSAVE_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed?.survey || null;
+        } catch {
+            return null;
+        }
+    }, [location.state]);
 
     if (!draft) {
         return (
-            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                <h1 className="text-xl font-semibold text-gray-800">Survey Preview</h1>
-                <p className="text-sm text-gray-500 mt-2">No draft found. Create a survey first.</p>
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h1 className="text-xl font-semibold text-slate-900">Preview</h1>
+                <p className="mt-1 text-sm text-slate-500">No builder draft found.</p>
                 <button
                     type="button"
-                    onClick={() => navigate(`${basePath}/create`)}
-                    className="mt-4 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm"
+                    onClick={() => navigate(`${roleBasePath}/surveys/builder/new`)}
+                    className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                 >
-                    Go to Builder
+                    Open Builder
                 </button>
             </div>
         );
     }
 
+    let number = 0;
+
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-4">
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 className="text-2xl font-semibold text-gray-900">Survey Preview</h1>
-                    <p className="text-sm text-gray-500">Review the survey flow before publishing.</p>
+                    <h1 className="text-xl font-semibold text-slate-900">Survey Preview</h1>
+                    <p className="text-sm text-slate-500">This is how respondents will experience the current schema.</p>
                 </div>
-                <div className="flex gap-3">
-                    <button
-                        type="button"
-                        onClick={() => navigate(`${basePath}/create`)}
-                        className="border border-gray-200 px-4 py-2 rounded-xl text-sm text-gray-600 hover:bg-gray-50"
-                    >
-                        Back to Builder
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => navigate(basePath)}
-                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm"
-                    >
-                        Publish Survey
-                    </button>
-                </div>
+                <button
+                    type="button"
+                    onClick={() => navigate(-1)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                    <ArrowLeft size={16} />
+                    Back to Builder
+                </button>
             </div>
 
-            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
-                <div>
-                    <div className="text-xs text-gray-400">Survey Title</div>
-                    <div className="text-xl font-semibold text-gray-900">{draft.title || "Untitled Survey"}</div>
-                    {draft.summary && <p className="text-sm text-gray-500 mt-1">{draft.summary}</p>}
-                </div>
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="text-xs uppercase tracking-wide text-sky-700">Survey</div>
+                <h2 className="mt-1 text-2xl font-semibold text-slate-900">{draft.title || "Untitled survey"}</h2>
+                {draft.description && <p className="mt-2 text-sm text-slate-600">{draft.description}</p>}
+            </section>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                    <div>
-                        <div className="text-xs text-gray-400">Category</div>
-                        <div>{draft.category || "Not set"}</div>
+            {(draft.pages || []).map((page, pageIndex) => (
+                <section key={page.id || pageIndex} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-4 border-b border-slate-100 pb-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Page {pageIndex + 1}</div>
+                        <h3 className="text-lg font-semibold text-slate-900">{page.title || `Page ${pageIndex + 1}`}</h3>
                     </div>
-                    <div>
-                        <div className="text-xs text-gray-400">Start Date</div>
-                        <div>{draft.startDate || "Not set"}</div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-gray-400">End Date</div>
-                        <div>{draft.endDate || "Not set"}</div>
-                    </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                    <div>
-                        <div className="text-xs text-gray-400">OTP Required</div>
-                        <div>{draft.otpRequired ? "Yes" : "No"}</div>
+                    <div className="space-y-4">
+                        {(page.questions || []).map((question) => {
+                            number += 1;
+                            return (
+                                <article key={question.id || number} className="rounded-xl border border-slate-200 p-4">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Q{number}</div>
+                                    <div className="mt-1 text-base font-medium text-slate-900">{question.text || "Untitled question"}</div>
+                                    {question.description && <p className="mt-1 text-sm text-slate-500">{question.description}</p>}
+                                    <div className="mt-1 text-xs text-slate-500">Type: {typeLabel(question.type)}</div>
+                                    {renderPlaceholder(question)}
+                                </article>
+                            );
+                        })}
                     </div>
-                    <div>
-                        <div className="text-xs text-gray-400">File Required</div>
-                        <div>{draft.fileRequired ? "Yes" : "No"}</div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-gray-400">Anonymous</div>
-                        <div>{draft.anonymous ? "Yes" : "No"}</div>
-                    </div>
-                </div>
-
-                <div>
-                    <div className="text-xs text-gray-400">Target Groups</div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        {(draft.targetGroups || []).length === 0 && (
-                            <span className="text-xs text-gray-400">No groups added</span>
-                        )}
-                        {(draft.targetGroups || []).map((group, index) => (
-                            <span
-                                key={`${group}-${index}`}
-                                className="bg-purple-50 text-purple-700 px-2 py-1 rounded-full text-xs"
-                            >
-                                {group}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            <div className="space-y-4">
-                {(draft.questions || []).map((question, index) => (
-                    <div key={question.id || index} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <div className="text-xs text-gray-400">Question {index + 1}</div>
-                                <div className="text-sm font-semibold text-gray-900 mt-1">
-                                    {question.text || "Untitled question"}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    Type: {question.type.replace("_", " ")}
-                                </div>
-                            </div>
-                            <span className="text-xs text-gray-400">
-                                {question.required ? "Required" : "Optional"}
-                            </span>
-                        </div>
-                        {(question.type === "single_choice" || question.type === "multiple_choice") && (
-                            <ul className="mt-3 space-y-2 text-sm text-gray-600">
-                                {(question.options || []).map((option, optionIndex) => (
-                                    <li key={`${question.id}-preview-${optionIndex}`} className="flex items-center gap-2">
-                                        <span className="h-2 w-2 rounded-full bg-purple-500"></span>
-                                        <div>
-                                            <div>{option}</div>
-                                            {question.optionFiles?.[optionIndex] && (
-                                                <div className="text-xs text-gray-400">
-                                                    File: {question.optionFiles[optionIndex]}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                        {question.type === "rating" && (
-                            <div className="mt-3 text-sm text-gray-600">
-                                Scale {question.scaleMin} to {question.scaleMax}
-                            </div>
-                        )}
-                        {question.type === "file_upload" && (
-                            <div className="mt-3 text-sm text-gray-600">
-                                <div className="text-xs text-gray-400">File upload</div>
-                                <div className="mt-2 h-10 rounded-lg border border-dashed border-gray-200 bg-gray-50" />
-                                {question.fileName && (
-                                    <div className="text-xs text-gray-400 mt-1">Selected: {question.fileName}</div>
-                                )}
-                            </div>
-                        )}
-                        {question.type === "short_text" && (
-                            <div className="mt-3 h-9 rounded-lg border border-dashed border-gray-200" />
-                        )}
-                        {question.type === "long_text" && (
-                            <div className="mt-3 h-20 rounded-lg border border-dashed border-gray-200" />
-                        )}
-                    </div>
-                ))}
-            </div>
+                </section>
+            ))}
         </div>
     );
 };

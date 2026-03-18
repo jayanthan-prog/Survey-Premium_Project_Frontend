@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
+import { ADMIN_NAV_LINKS } from "../../constants/navigation";
 import Topbar from "./Topbar";
 
 const AdminLayout = () => {
@@ -8,9 +9,9 @@ const AdminLayout = () => {
 
     return (
         <div className="h-screen bg-slate-50 flex overflow-hidden">
-            <Sidebar isOpen={isOpen} setIsOpen={setIsOpen} />
+            <Sidebar isOpen={isOpen} setIsOpen={setIsOpen} navLinks={ADMIN_NAV_LINKS} />
 
-            <div className="flex-1 flex flex-col md:ml-64 transition-all duration-300 min-h-0">
+            <div className="flex-1 flex flex-col transition-all duration-300 min-h-0 md:ml-64">
                 <Topbar setIsOpen={setIsOpen} />
                 <main className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto w-full">
                     <Outlet />

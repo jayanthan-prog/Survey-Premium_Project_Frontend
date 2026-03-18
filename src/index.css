@@ -23,3 +23,55 @@ html {
 body {
   -ms-overflow-style: none;
 }
+
+html.dark body {
+  background-color: #0b1220;
+  color: #e2e8f0;
+}
+
+html.dark .bg-white {
+  background-color: #0f172a;
+}
+
+html.dark .bg-gray-50 {
+  background-color: #111827;
+}
+
+html.dark .bg-slate-50 {
+  background-color: #0b1220;
+}
+
+html.dark .border-gray-100,
+html.dark .border-gray-200,
+html.dark .border-slate-200,
+html.dark .border-slate-100 {
+  border-color: #1f2937;
+}
+
+html.dark .text-gray-900 {
+  color: #f8fafc;
+}
+
+html.dark .text-gray-800 {
+  color: #e2e8f0;
+}
+
+html.dark .text-gray-700 {
+  color: #cbd5f5;
+}
+
+html.dark .text-gray-600,
+html.dark .text-gray-500 {
+  color: #94a3b8;
+}
+
+html.dark .text-gray-400 {
+  color: #7f8ea3;
+}
+
+html.dark .shadow-sm,
+html.dark .shadow-lg,
+html.dark .shadow-xl,
+html.dark .shadow-2xl {
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.45);
+}

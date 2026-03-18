@@ -1,67 +1,154 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import {
+    archiveSurvey,
+    deleteRelease,
+    getReleasesForSurvey,
+    getSurveys,
+    updateRelease,
+} from "../../services/surveyApi";
 
 const ReleasesModule = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
 
     const basePath = user?.role === "APPROVER" ? "/approver" : "/admin";
-    const stats = [
-        { label: "Active", value: 5, tone: "text-emerald-600", bg: "bg-emerald-50" },
-        { label: "Frozen", value: 2, tone: "text-amber-600", bg: "bg-amber-50" },
-        { label: "Stopped", value: 1, tone: "text-rose-600", bg: "bg-rose-50" },
-        { label: "Scheduled", value: 3, tone: "text-slate-600", bg: "bg-slate-50" },
-    ];
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [searchTerm, setSearchTerm] = useState("");
+    const [actionLoading, setActionLoading] = useState(false);
 
-    const releases = useMemo(
-        () => [
-            {
-                id: "REL-210",
-                survey: "Hostel Preference 2026",
-                status: "Active",
-                audience: "First Year",
-                window: "2026-02-01 → 2026-02-15",
-                responses: 812,
-                completionRate: 92,
-                owner: "Admin",
-            },
-            {
-                id: "REL-209",
-                survey: "Internship Willingness",
-                status: "Frozen",
-                audience: "Final Year",
-                window: "2026-01-20 → 2026-02-05",
-                responses: 560,
-                completionRate: 78,
-                owner: "Approver",
-            },
-            {
-                id: "REL-207",
-                survey: "Elective Course Bidding",
-                status: "Stopped",
-                audience: "All UG",
-                window: "2026-01-05 → 2026-01-18",
-                responses: 904,
-                completionRate: 88,
-                owner: "Admin",
-            },
-            {
-                id: "REL-205",
-                survey: "Transport Facilities Feedback",
-                status: "Scheduled",
-                audience: "All Students",
-                window: "2026-02-20 → 2026-03-05",
-                responses: 0,
-                completionRate: 0,
-                owner: "Admin",
-            },
-        ],
-        []
-    );
+    const [releases, setReleases] = useState([]);
+    const [selectedReleaseId, setSelectedReleaseId] = useState(null);
 
-    const [selectedReleaseId, setSelectedReleaseId] = useState(releases[0]?.id);
-    const selectedRelease = releases.find((item) => item.id === selectedReleaseId);
+    const getReleaseStatus = (release) => {
+        if (release.is_frozen) return "Frozen";
+
+        const now = new Date();
+        const opensAt = release.opens_at ? new Date(release.opens_at) : null;
+        const closesAt = release.closes_at ? new Date(release.closes_at) : null;
+
+        if (opensAt && now < opensAt) return "Scheduled";
+        if (closesAt && now > closesAt) return "Stopped";
+        return "Active";
+    };
+
+    const formatDate = (value) => {
+        if (!value) return "-";
+        try {
+            return new Date(value).toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+            });
+        } catch {
+            return String(value);
+        }
+    };
+
+    const loadReleases = async () => {
+        try {
+            setLoading(true);
+            setError("");
+
+            const surveys = await getSurveys();
+            const surveyList = Array.isArray(surveys) ? surveys : [];
+
+            const releaseGroups = await Promise.all(
+                surveyList.map(async (survey) => {
+                    try {
+                        const surveyReleases = await getReleasesForSurvey(survey.survey_id);
+                        const rows = Array.isArray(surveyReleases) ? surveyReleases : [];
+                        return rows.map((release) => {
+                            const participants = Number(release.total_participants || 0);
+                            const submitted = Number(release.submitted_count || 0);
+                            const completionRate = participants > 0
+                                ? Math.round((submitted / participants) * 100)
+                                : 0;
+
+                            return {
+                                ...release,
+                                survey_id: survey.survey_id,
+                                survey_title: survey.title,
+                                survey_status: survey.status,
+                                status: getReleaseStatus(release),
+                                participants,
+                                submitted,
+                                completionRate,
+                            };
+                        });
+                    } catch {
+                        return [];
+                    }
+                })
+            );
+
+            const flat = releaseGroups.flat();
+            flat.sort((a, b) => {
+                const left = new Date(a.created_at || 0).getTime();
+                const right = new Date(b.created_at || 0).getTime();
+                return right - left;
+            });
+
+            setReleases(flat);
+            setSelectedReleaseId((prev) => {
+                if (!flat.length) return null;
+                if (prev && flat.some((item) => item.release_id === prev)) return prev;
+                return flat[0].release_id;
+            });
+        } catch (err) {
+            setError(err?.message || "Failed to load releases.");
+            setReleases([]);
+            setSelectedReleaseId(null);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadReleases();
+    }, []);
+
+    const filteredReleases = useMemo(() => {
+        const query = searchTerm.trim().toLowerCase();
+        if (!query) return releases;
+
+        return releases.filter((release) => (
+            String(release.name || "").toLowerCase().includes(query)
+            || String(release.survey_title || "").toLowerCase().includes(query)
+            || String(release.release_id || "").toLowerCase().includes(query)
+            || String(release.status || "").toLowerCase().includes(query)
+        ));
+    }, [releases, searchTerm]);
+
+    useEffect(() => {
+        if (!filteredReleases.length) {
+            setSelectedReleaseId(null);
+            return;
+        }
+
+        const exists = filteredReleases.some((item) => item.release_id === selectedReleaseId);
+        if (!exists) {
+            setSelectedReleaseId(filteredReleases[0].release_id);
+        }
+    }, [filteredReleases, selectedReleaseId]);
+
+    const selectedRelease = filteredReleases.find((item) => item.release_id === selectedReleaseId) || filteredReleases[0];
+
+    const stats = useMemo(() => {
+        const active = releases.filter((item) => item.status === "Active").length;
+        const frozen = releases.filter((item) => item.status === "Frozen").length;
+        const stopped = releases.filter((item) => item.status === "Stopped").length;
+        const scheduled = releases.filter((item) => item.status === "Scheduled").length;
+
+        return [
+            { label: "Active", value: active, tone: "text-emerald-600", bg: "bg-emerald-50" },
+            { label: "Frozen", value: frozen, tone: "text-amber-600", bg: "bg-amber-50" },
+            { label: "Stopped", value: stopped, tone: "text-rose-600", bg: "bg-rose-50" },
+            { label: "Scheduled", value: scheduled, tone: "text-slate-600", bg: "bg-slate-50" },
+        ];
+    }, [releases]);
 
     const statusBadge = (status) => {
         switch (status) {
@@ -84,6 +171,9 @@ const ReleasesModule = () => {
                 </div>
             </div>
 
+            {error && <div className="text-sm text-red-600">{error}</div>}
+            {loading && <div className="text-sm text-gray-500">Loading releases...</div>}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {stats.map((stat) => (
                     <div key={stat.label} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
@@ -98,30 +188,38 @@ const ReleasesModule = () => {
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <div className="xl:col-span-2 bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100">
+                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
                         <h2 className="font-semibold text-gray-800">Published Releases</h2>
+                        <input
+                            value={searchTerm}
+                            onChange={(event) => setSearchTerm(event.target.value)}
+                            placeholder="Search releases..."
+                            className="w-56 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 shadow-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                        />
                     </div>
                     <div className="divide-y divide-gray-100">
-                        {releases.map((release) => (
+                        {filteredReleases.map((release) => (
                             <button
                                 type="button"
-                                key={release.id}
-                                onClick={() => setSelectedReleaseId(release.id)}
-                                className={`w-full text-left px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2 hover:bg-slate-50 transition ${selectedReleaseId === release.id ? "bg-slate-50" : "bg-white"
-                                    }`}
+                                key={release.release_id}
+                                onClick={() => setSelectedReleaseId(release.release_id)}
+                                className={`w-full text-left px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2 hover:bg-slate-50 transition ${selectedReleaseId === release.release_id ? "bg-slate-50" : "bg-white"}`}
                             >
                                 <div>
-                                    <div className="text-sm font-semibold text-gray-900">{release.survey}</div>
-                                    <div className="text-xs text-gray-500">{release.id} · Audience: {release.audience}</div>
+                                    <div className="text-sm font-semibold text-gray-900">{release.survey_title}</div>
+                                    <div className="text-xs text-gray-500">REL-{release.release_id} · {release.name}</div>
                                 </div>
                                 <div className="flex items-center gap-4 text-xs text-gray-500">
                                     <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${statusBadge(release.status)}`}>
                                         {release.status}
                                     </span>
-                                    <div>{release.window}</div>
+                                    <div>{formatDate(release.opens_at)} to {formatDate(release.closes_at)}</div>
                                 </div>
                             </button>
                         ))}
+                        {!filteredReleases.length && !loading && (
+                            <div className="px-6 py-8 text-sm text-gray-500">No releases found.</div>
+                        )}
                     </div>
                 </div>
 
@@ -131,12 +229,12 @@ const ReleasesModule = () => {
                         <>
                             <div>
                                 <div className="text-xs text-gray-400">Survey</div>
-                                <div className="font-medium text-gray-900">{selectedRelease.survey}</div>
+                                <div className="font-medium text-gray-900">{selectedRelease.survey_title}</div>
                             </div>
                             <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
                                     <div className="text-xs text-gray-400">Release ID</div>
-                                    <div className="text-gray-700">{selectedRelease.id}</div>
+                                    <div className="text-gray-700">REL-{selectedRelease.release_id}</div>
                                 </div>
                                 <div>
                                     <div className="text-xs text-gray-400">Status</div>
@@ -144,7 +242,7 @@ const ReleasesModule = () => {
                                 </div>
                                 <div>
                                     <div className="text-xs text-gray-400">Responses</div>
-                                    <div className="text-gray-700">{selectedRelease.responses}</div>
+                                    <div className="text-gray-700">{selectedRelease.submitted}</div>
                                 </div>
                                 <div>
                                     <div className="text-xs text-gray-400">Completion</div>
@@ -152,13 +250,17 @@ const ReleasesModule = () => {
                                 </div>
                             </div>
                             <div>
+                                <div className="text-xs text-gray-400">Participants</div>
+                                <div className="text-sm text-gray-700">{selectedRelease.participants}</div>
+                            </div>
+                            <div>
                                 <div className="text-xs text-gray-400">Release Window</div>
-                                <div className="text-sm text-gray-700">{selectedRelease.window}</div>
+                                <div className="text-sm text-gray-700">{formatDate(selectedRelease.opens_at)} to {formatDate(selectedRelease.closes_at)}</div>
                             </div>
                             <div className="pt-2 space-y-2">
                                 <button
                                     onClick={() =>
-                                        navigate(`${basePath}/releases/${selectedRelease.id}/edit`, {
+                                        navigate(`${basePath}/releases/${selectedRelease.survey_id}/edit`, {
                                             state: { release: selectedRelease },
                                         })
                                     }
@@ -167,19 +269,104 @@ const ReleasesModule = () => {
                                     Modify Release
                                 </button>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <button className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 hover:bg-amber-100">
-                                        Freeze Window
+                                    <button
+                                        disabled={actionLoading || selectedRelease.is_frozen}
+                                        onClick={async () => {
+                                            try {
+                                                setActionLoading(true);
+                                                setError("");
+                                                await updateRelease(selectedRelease.survey_id, selectedRelease.release_id, { is_frozen: true });
+                                                await loadReleases();
+                                            } catch (err) {
+                                                setError(err?.message || "Failed to freeze release.");
+                                            } finally {
+                                                setActionLoading(false);
+                                            }
+                                        }}
+                                        className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                                    >
+                                        Freeze
                                     </button>
-                                    <button className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-100">
+                                    <button
+                                        disabled={actionLoading || !selectedRelease.is_frozen}
+                                        onClick={async () => {
+                                            try {
+                                                setActionLoading(true);
+                                                setError("");
+                                                await updateRelease(selectedRelease.survey_id, selectedRelease.release_id, { is_frozen: false });
+                                                await loadReleases();
+                                            } catch (err) {
+                                                setError(err?.message || "Failed to resume release.");
+                                            } finally {
+                                                setActionLoading(false);
+                                            }
+                                        }}
+                                        className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                                    >
                                         Resume
                                     </button>
-                                    <button className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 hover:bg-rose-100">
-                                        Stop Responses
+                                    <button
+                                        disabled={actionLoading}
+                                        onClick={async () => {
+                                            try {
+                                                setActionLoading(true);
+                                                setError("");
+                                                await updateRelease(selectedRelease.survey_id, selectedRelease.release_id, {
+                                                    is_frozen: true,
+                                                    closes_at: new Date().toISOString(),
+                                                });
+                                                await loadReleases();
+                                            } catch (err) {
+                                                setError(err?.message || "Failed to stop responses.");
+                                            } finally {
+                                                setActionLoading(false);
+                                            }
+                                        }}
+                                        className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                                    >
+                                        Stop
                                     </button>
-                                    <button className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 hover:bg-slate-100">
-                                        Archive
+                                    <button
+                                        disabled={actionLoading}
+                                        onClick={async () => {
+                                            const confirmed = window.confirm("Archive the linked survey for this release?");
+                                            if (!confirmed) return;
+                                            try {
+                                                setActionLoading(true);
+                                                setError("");
+                                                await archiveSurvey(selectedRelease.survey_id);
+                                                await loadReleases();
+                                            } catch (err) {
+                                                setError(err?.message || "Failed to archive survey.");
+                                            } finally {
+                                                setActionLoading(false);
+                                            }
+                                        }}
+                                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                                    >
+                                        Archive Survey
                                     </button>
                                 </div>
+                                <button
+                                    disabled={actionLoading}
+                                    onClick={async () => {
+                                        const confirmed = window.confirm(`Delete release ${selectedRelease.name}?`);
+                                        if (!confirmed) return;
+                                        try {
+                                            setActionLoading(true);
+                                            setError("");
+                                            await deleteRelease(selectedRelease.survey_id, selectedRelease.release_id);
+                                            await loadReleases();
+                                        } catch (err) {
+                                            setError(err?.message || "Failed to delete release.");
+                                        } finally {
+                                            setActionLoading(false);
+                                        }
+                                    }}
+                                    className="w-full rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                                >
+                                    Delete Release
+                                </button>
                             </div>
                         </>
                     ) : (

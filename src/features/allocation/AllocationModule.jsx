@@ -1,8 +1,11 @@
+import { Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 const AllocationModule = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [searchTerm, setSearchTerm] = useState("");
 
     const allocations = useMemo(
@@ -45,19 +48,25 @@ const AllocationModule = () => {
         );
     });
 
+    const role = String(user?.role || "").toUpperCase();
+    const canAddAllocation = role === "ADMIN" || role === "APPROVER";
+    const allocationCreatePath = role === "APPROVER" ? "/approver/allocation/create" : "/admin/allocation/create";
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold text-gray-900">Allocation</h1>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => navigate("/admin/allocation/create")}
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium"
-                >
-                    + Add Allocation
-                </button>
+                {canAddAllocation && (
+                    <button
+                        type="button"
+                        onClick={() => navigate(allocationCreatePath)}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium"
+                    >
+                        + Add Allocation
+                    </button>
+                )}
             </div>
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -94,10 +103,10 @@ const AllocationModule = () => {
                                     <td className="px-6 py-4">
                                         <span
                                             className={`px-2 py-1 rounded-full text-[10px] font-semibold ${item.status === "Active"
-                                                    ? "bg-emerald-50 text-emerald-700"
-                                                    : item.status === "Scheduled"
-                                                        ? "bg-amber-50 text-amber-700"
-                                                        : "bg-slate-50 text-slate-600"
+                                                ? "bg-emerald-50 text-emerald-700"
+                                                : item.status === "Scheduled"
+                                                    ? "bg-amber-50 text-amber-700"
+                                                    : "bg-slate-50 text-slate-600"
                                                 }`}
                                         >
                                             {item.status}
@@ -105,8 +114,12 @@ const AllocationModule = () => {
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex items-center justify-end gap-2 text-xs">
-                                            <button className="text-purple-600 hover:underline">Edit</button>
-                                            <button className="text-rose-600 hover:underline">Remove</button>
+                                            <button className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100" aria-label="Edit allocation">
+                                                <Pencil size={16} />
+                                            </button>
+                                            <button className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100" aria-label="Remove allocation">
+                                                <Trash2 size={16} />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>

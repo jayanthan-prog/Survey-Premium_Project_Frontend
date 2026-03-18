@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { users } from "../constants/users";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { GoogleLogin } from "@react-oauth/google";
+import { getHomePathByRole, loginRequest, loginWithGoogle } from "../services/authservice";
 
 const Login = () => {
-    const [id, setId] = useState("");
+    const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -12,38 +13,44 @@ const Login = () => {
 
     const { login } = useAuth();
     const navigate = useNavigate();
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
         setError("");
-
         setLoading(true);
 
-        // Fake delay (feels real)
-        setTimeout(() => {
-            const foundUser = users.find(
-                (u) => u.id === id && u.password === password
-            );
+        try {
+            const result = await loginRequest({ identifier, password });
+            login(result);
+            navigate(getHomePathByRole(result?.user?.role), { replace: true });
+        } catch (err) {
+            setError(err?.message || "Unable to login. Please verify your credentials.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
-            if (!foundUser) {
-                setError("Invalid User ID or Password");
-                setLoading(false);
-                return;
+    const handleGoogleSuccess = async (credentialResponse) => {
+        setError("");
+        setLoading(true);
+        try {
+            const credential = credentialResponse && credentialResponse.credential;
+            if (!credential) {
+                throw new Error("Google authentication failed. Missing credential token.");
             }
+            const result = await loginWithGoogle(credential);
+            login(result);
+            navigate(getHomePathByRole(result?.user?.role), { replace: true });
+        } catch (err) {
+            setError(err?.message || "Google login failed. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
-            login(foundUser);
-
-            if (foundUser.role === "ADMIN") {
-                navigate("/admin/dashboard");
-            }
-            else if (foundUser.role === "STUDENT") {
-                navigate("/student/dashboard");
-            }
-            else {
-                navigate("/approver/dashboard");
-            }
-
-        }, 700);
+    const handleGoogleError = () => {
+        setError("Google login was cancelled or failed. Please try again.");
     };
 
     return (
@@ -72,9 +79,9 @@ const Login = () => {
 
                         <input
                             type="text"
-                            placeholder="Enter your ID"
-                            value={id}
-                            onChange={(e) => setId(e.target.value)}
+                            placeholder="Enter email or user ID"
+                            value={identifier}
+                            onChange={(e) => setIdentifier(e.target.value)}
                             className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 
                          focus:outline-none focus:ring-2 focus:ring-purple-500"
                             required
@@ -126,10 +133,33 @@ const Login = () => {
 
                 </form>
 
+                <div className="my-5 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-gray-200" />
+                    <span className="text-xs text-gray-400">OR</span>
+                    <div className="h-px flex-1 bg-gray-200" />
+                </div>
+
+                <div className="flex justify-center">
+                    {googleClientId ? (
+                        <GoogleLogin
+                            onSuccess={handleGoogleSuccess}
+                            onError={handleGoogleError}
+                            text="signin_with"
+                            shape="pill"
+                            size="large"
+                            theme="outline"
+                            width="320"
+                        />
+                    ) : (
+                        <p className="text-xs text-amber-600 text-center">
+                            Google login is disabled. Set VITE_GOOGLE_CLIENT_ID to enable it.
+                        </p>
+                    )}
+                </div>
+
                 {/* Demo Credentials */}
                 <div className="mt-6 text-xs text-gray-400 text-center">
-                    <p>Demo Users:</p>
-                    <p>admin123 / student123 / approver123</p>
+                    <p>Use your backend user email or user ID to sign in.</p>
                 </div>
 
             </div>

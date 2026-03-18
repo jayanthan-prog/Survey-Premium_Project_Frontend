@@ -1,23 +1,57 @@
-import { useState } from "react";
-import { Search, Filter, Download, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Check, Lock, LockOpen, Pencil, Search, Trash2, UserPlus, X } from "lucide-react";
 import ExcelImporter from "../groups/components/ExcelImporter";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { createUser, deleteUser, listUsers, updateUser } from "../../services/userService";
+
+const PAGE_SIZES = [10, 15, 25];
 
 const UsersModule = () => {
     const navigate = useNavigate();
-    // Sample Data matching SRS Schema (Page 22)
-    const [users, setUsers] = useState([
-        { id: 1, name: "John Doe", email: "john@edu.com", category: "Boys", year: "2", status: "Active" },
-        { id: 2, name: "Jane Smith", email: "jane@edu.com", category: "Girls", year: "3", status: "Active" },
-        { id: 3, name: "Alex Wong", email: "alex@edu.com", category: "Boys", year: "1", status: "Inactive" },
-    ]);
+    const { token, user } = useAuth();
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [searchText, setSearchText] = useState("");
+    const [yearFilter, setYearFilter] = useState("ALL");
+    const [categoryFilter, setCategoryFilter] = useState("ALL");
+    const [editingId, setEditingId] = useState(null);
+    const [editDraft, setEditDraft] = useState({});
+    const [pendingDeleteUser, setPendingDeleteUser] = useState(null);
+    const [pageSize, setPageSize] = useState(10);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    const roleBasePath = user?.role === "APPROVER" ? "/approver" : "/admin";
+
+    const loadUsers = async () => {
+        if (!token) {
+            setLoading(false);
+            setError("Missing auth token");
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const response = await listUsers(token, { includeInactive: true });
+            setUsers(Array.isArray(response) ? response : []);
+        } catch (err) {
+            setError(err?.message || "Failed to load users.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadUsers();
+    }, [token]);
 
     const handleImport = (rows) => {
         if (!Array.isArray(rows) || rows.length === 0) {
             return;
         }
 
-        const nextUsers = rows.map((row, index) => {
+        const nextUsers = rows.map((row) => {
             const name = row.name || row.fullName || row.Name || row["Full Name"] || "Unknown";
             const email = row.email || row.Email || row["Email Address"] || "";
             const category = row.category || row.Category || row.group || row.Group || "";
@@ -25,76 +59,345 @@ const UsersModule = () => {
             const status = row.status || row.Status || "Active";
 
             return {
-                id: Date.now() + index,
                 name: String(name),
                 email: String(email),
                 category: String(category),
-                year: String(year),
-                status: String(status),
+                year: year ? Number(year) : null,
+                is_active: String(status).toLowerCase() !== "inactive",
+                attributes: {},
             };
         });
 
-        setUsers((prev) => [...prev, ...nextUsers]);
+        const createImported = async () => {
+            try {
+                for (const payload of nextUsers) {
+                    await createUser(token, payload);
+                }
+            } catch (err) {
+                setError(err?.message || "Failed to import some users.");
+            } finally {
+                loadUsers();
+            }
+        };
+
+        createImported();
+    };
+
+    const uniqueYears = useMemo(() => {
+        const years = new Set(users.map((item) => item.year).filter((v) => v !== null && v !== undefined));
+        return Array.from(years).sort((a, b) => Number(a) - Number(b));
+    }, [users]);
+
+    const uniqueCategories = useMemo(() => {
+        const categories = new Set(users.map((item) => item.category).filter(Boolean));
+        return Array.from(categories).sort();
+    }, [users]);
+
+    const filteredUsers = useMemo(() => {
+        const query = searchText.trim().toLowerCase();
+        return users.filter((item) => {
+            const isCurrentUser = Number(item.user_id) === Number(user?.user_id);
+            const matchesQuery = !query || String(item.name || "").toLowerCase().includes(query) || String(item.email || "").toLowerCase().includes(query);
+            const matchesYear = yearFilter === "ALL" || String(item.year || "") === String(yearFilter);
+            const matchesCategory = categoryFilter === "ALL" || String(item.category || "") === String(categoryFilter);
+            return !isCurrentUser && matchesQuery && matchesYear && matchesCategory;
+        });
+    }, [users, searchText, yearFilter, categoryFilter, user?.user_id]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchText, yearFilter, categoryFilter, pageSize]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
+
+    const paginatedUsers = useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        return filteredUsers.slice(startIndex, startIndex + pageSize);
+    }, [filteredUsers, currentPage, pageSize]);
+
+    const pageRangeStart = filteredUsers.length ? (currentPage - 1) * pageSize + 1 : 0;
+    const pageRangeEnd = Math.min(currentPage * pageSize, filteredUsers.length);
+
+    const beginEdit = (row) => {
+        setEditingId(row.user_id);
+        setEditDraft({
+            name: row.name || "",
+            email: row.email || "",
+            category: row.category || "",
+            year: row.year || "",
+            is_active: Boolean(row.is_active),
+        });
+    };
+
+    const saveEdit = async (userId) => {
+        try {
+            await updateUser(token, userId, {
+                name: editDraft.name,
+                email: editDraft.email,
+                category: editDraft.category || null,
+                year: editDraft.year === "" ? null : Number(editDraft.year),
+                is_active: Boolean(editDraft.is_active),
+            });
+            setEditingId(null);
+            await loadUsers();
+        } catch (err) {
+            setError(err?.message || "Failed to update user.");
+        }
+    };
+
+    const removeUser = async (userId) => {
+        try {
+            await deleteUser(token, userId);
+            setPendingDeleteUser(null);
+            await loadUsers();
+        } catch (err) {
+            setError(err?.message || "Failed to delete user.");
+        }
+    };
+
+    const toggleUserFreeze = async (row) => {
+        try {
+            setError("");
+            await updateUser(token, row.user_id, { is_active: !row.is_active });
+            await loadUsers();
+        } catch (err) {
+            setError(err?.message || `Failed to ${row.is_active ? "freeze" : "enable"} user.`);
+        }
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold text-gray-800">User Management</h2>
-                <div className="flex gap-2">
-                    <ExcelImporter onImport={handleImport} />
-                    <button
-                        onClick={() => navigate("/admin/users/create")}
-                        className="bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium"
-                    >
-                        <UserPlus size={16} /> Add User
-                    </button>
+        <>
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-bold text-gray-800">User Management</h2>
+                    <div className="flex gap-2">
+                        <ExcelImporter onImport={handleImport} />
+                        <button
+                            onClick={() => navigate(`${roleBasePath}/users/create`)}
+                            className="bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium"
+                        >
+                            <UserPlus size={16} /> Add User
+                        </button>
+                    </div>
+                </div>
+
+                {loading && <div className="text-sm text-gray-500">Loading users...</div>}
+                {error && <div className="text-sm text-red-600">{error}</div>}
+
+                {/* Filters Area (SRS Page 55) */}
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-wrap gap-4">
+                    <div className="flex-1 min-w-[200px] relative">
+                        <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                        <input value={searchText} onChange={(e) => setSearchText(e.target.value)} type="text" placeholder="Search by name, email..." className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm outline-none focus:ring-2 ring-purple-500/20" />
+                    </div>
+                    <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className="border rounded-lg px-4 py-2 text-sm outline-none"><option value="ALL">All Years</option>{uniqueYears.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+                    <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="border rounded-lg px-4 py-2 text-sm outline-none"><option value="ALL">All Categories</option>{uniqueCategories.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+                </div>
+
+                {/* Users Table + Pagination */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden  flex flex-col">
+                    <div className="flex-1 overflow-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50 border-b sticky top-0 z-10">
+                                <tr>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">User</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Category</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Year</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Status</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {paginatedUsers.map(user => (
+                                    <tr
+                                        key={user.user_id}
+                                        className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                        onClick={() => {
+                                            if (editingId !== user.user_id) {
+                                                navigate(`${roleBasePath}/users/${user.user_id}`);
+                                            }
+                                        }}
+                                    >
+                                        <td className="px-6 py-4">
+                                            {editingId === user.user_id ? (
+                                                <div className="space-y-2">
+                                                    <input className="w-full border rounded px-2 py-1 text-sm" value={editDraft.name || ""} onClick={(event) => event.stopPropagation()} onChange={(e) => setEditDraft((prev) => ({ ...prev, name: e.target.value }))} />
+                                                    <input className="w-full border rounded px-2 py-1 text-xs" value={editDraft.email || ""} onClick={(event) => event.stopPropagation()} onChange={(e) => setEditDraft((prev) => ({ ...prev, email: e.target.value }))} />
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="font-medium text-gray-900">{user.name}</div>
+                                                    <div className="text-xs text-gray-500">{user.email}</div>
+                                                </>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-600">
+                                            {editingId === user.user_id ? (
+                                                <input className="w-28 border rounded px-2 py-1 text-sm" value={editDraft.category || ""} onClick={(event) => event.stopPropagation()} onChange={(e) => setEditDraft((prev) => ({ ...prev, category: e.target.value }))} />
+                                            ) : (
+                                                user.category || "-"
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-600">
+                                            {editingId === user.user_id ? (
+                                                <input className="w-20 border rounded px-2 py-1 text-sm" value={editDraft.year ?? ""} onClick={(event) => event.stopPropagation()} onChange={(e) => setEditDraft((prev) => ({ ...prev, year: e.target.value }))} />
+                                            ) : (
+                                                user.year ? `Year ${user.year}` : "-"
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {editingId === user.user_id ? (
+                                                <label className="inline-flex items-center gap-3 text-xs font-medium text-gray-700">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            setEditDraft((prev) => ({ ...prev, is_active: !prev.is_active }));
+                                                        }}
+                                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editDraft.is_active ? "bg-purple-600" : "bg-gray-200"}`}
+                                                        aria-pressed={Boolean(editDraft.is_active)}
+                                                    >
+                                                        <span
+                                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editDraft.is_active ? "translate-x-6" : "translate-x-1"}`}
+                                                        />
+                                                    </button>
+                                                    Active
+                                                </label>
+                                            ) : (
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                    {user.is_active ? "Active" : "Inactive"}
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-right text-sm">
+                                            {editingId === user.user_id ? (
+                                                <div className="flex justify-end gap-3">
+                                                    <button onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        saveEdit(user.user_id);
+                                                    }} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100" aria-label="Save user">
+                                                        <Check size={16} />
+                                                    </button>
+                                                    <button onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        setEditingId(null);
+                                                    }} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" aria-label="Cancel edit">
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex justify-end gap-3">
+                                                    <button onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        beginEdit(user);
+                                                    }} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100" aria-label="Edit user">
+                                                        <Pencil size={16} />
+                                                    </button>
+                                                    <button onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        toggleUserFreeze(user);
+                                                    }} className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${user.is_active ? "bg-amber-50 text-amber-700 hover:bg-amber-100" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`} aria-label={user.is_active ? "Freeze user" : "Enable user"} title={user.is_active ? "Freeze user" : "Enable user"}>
+                                                        {user.is_active ? <Lock size={16} /> : <LockOpen size={16} />}
+                                                    </button>
+                                                    <button onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        setPendingDeleteUser(user);
+                                                    }} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100" aria-label="Delete user">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {!filteredUsers.length && (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-4 text-sm text-gray-500">No users found.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="border-t border-gray-100 flex flex-col gap-3 px-4 py-3 text-sm md:flex-row md:items-center md:justify-between">
+                        <div className="text-gray-600">
+                            Showing {pageRangeStart}-{pageRangeEnd} of {filteredUsers.length} users
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            <label className="text-gray-500">Per page</label>
+                            <select
+                                value={pageSize}
+                                onChange={(event) => setPageSize(Number(event.target.value))}
+                                className="rounded-lg border border-gray-200 px-2 py-1 outline-none focus:ring-2 ring-purple-500/20"
+                            >
+                                {PAGE_SIZES.map((size) => (
+                                    <option key={size} value={size}>{size}</option>
+                                ))}
+                            </select>
+
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                                className="rounded-lg border border-gray-200 px-3 py-1 text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                Previous
+                            </button>
+
+                            <span className="px-2 text-gray-600">Page {currentPage} of {totalPages}</span>
+
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                                disabled={currentPage === totalPages}
+                                className="rounded-lg border border-gray-200 px-3 py-1 text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Filters Area (SRS Page 55) */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-wrap gap-4">
-                <div className="flex-1 min-w-[200px] relative">
-                    <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                    <input type="text" placeholder="Search by name, email..." className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm outline-none focus:ring-2 ring-purple-500/20" />
+            {pendingDeleteUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 px-4 backdrop-blur-[2px]">
+                    <div className="w-full max-w-sm rounded-[28px] bg-white p-6 text-center shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+                        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-400">
+                            <AlertCircle size={20} strokeWidth={2.25} />
+                        </div>
+                        <h3 className="text-2xl font-semibold tracking-tight text-slate-900">Delete User</h3>
+                        <p className="mt-3 text-sm leading-6 text-slate-500">
+                            Are you sure you want to delete this user?
+                            <br />
+                            This action cannot be undone.
+                        </p>
+                        <div className="mt-6 grid grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setPendingDeleteUser(null)}
+                                className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-200"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => removeUser(pendingDeleteUser.user_id)}
+                                className="rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-600"
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <select className="border rounded-lg px-4 py-2 text-sm outline-none"><option>All Years</option></select>
-                <select className="border rounded-lg px-4 py-2 text-sm outline-none"><option>All Categories</option></select>
-            </div>
-
-            {/* Users Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <table className="w-full text-left">
-                    <thead className="bg-gray-50 border-b">
-                        <tr>
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">User</th>
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Category</th>
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Year</th>
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Status</th>
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {users.map(user => (
-                            <tr key={user.id} className="hover:bg-gray-50 transition-colors cursor-pointer">
-                                <td className="px-6 py-4">
-                                    <div className="font-medium text-gray-900">{user.name}</div>
-                                    <div className="text-xs text-gray-500">{user.email}</div>
-                                </td>
-                                <td className="px-6 py-4 text-sm text-gray-600">{user.category}</td>
-                                <td className="px-6 py-4 text-sm text-gray-600">Year {user.year}</td>
-                                <td className="px-6 py-4">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                                        {user.status}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 text-right text-purple-600 font-medium text-sm">View Profile</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+            )}
+        </>
     );
 };
 

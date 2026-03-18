@@ -12,6 +12,7 @@ import { Unauthorized } from "../pages/Unauthorized";
 import { AdminDashboard } from "../pages/admin/AdminDashboard";
 import UsersModule from "../features/users/UsersModule";
 import AddUserPage from "../features/users/pages/AddUserPage";
+import UserProfilePage from "../features/users/pages/UserProfilePage";
 import GroupsModule from "../features/groups/GroupsModule";
 import SurveysModule from "../features/surveys/SurveysModule";
 import SurveyBuilderPage from "../features/surveys/pages/SurveyBuilderPage";
@@ -19,6 +20,7 @@ import SurveyPreviewPage from "../features/surveys/pages/SurveyPreviewPage";
 import SurveyReportPage from "../features/surveys/pages/SurveyReportPage";
 import ReleasesModule from "../features/releases/ReleasesModule";
 import ApprovalsModule from "../features/approvals/ApprovalsModule";
+import StudentApprovalsPage from "../pages/student/StudentApprovalsPage";
 import DocumentsModule from "../features/documents/DocumentsModule";
 import AllocationModule from "../features/allocation/AllocationModule";
 import CalendarModule from "../features/calendar/CalendarModule";
@@ -32,6 +34,8 @@ import SettingsModule from "../features/settings/SettingsModule";
 
 // --- STUDENT PAGES (Based on SRS Page 7/8 - Section 13) ---
 import { StudentDashboard } from "../pages/student/StudentDashboard";
+import StudentSurveysPage from "../pages/student/StudentSurveysPage";
+import TakeSurveyPage from "../pages/student/TakeSurveyPage";
 // Component for "My Commitments" (Section 13.2)
 // Component for taking surveys
 
@@ -65,18 +69,22 @@ const router = createBrowserRouter([
             </ProtectedRoute>
         ),
         children: [
-            { path: "dashboard", element: <AdminDashboard /> },
+            { index: true, element: <Navigate to="dashboard" replace /> },
+            { path: "dashboard", element: <ApproverDashboard /> },
             { path: "users", element: <UsersModule /> },
             { path: "users/create", element: <AddUserPage /> },
+            { path: "users/:id", element: <UserProfilePage /> },
             { path: "groups", element: <GroupsModule /> },
             { path: "groups/create", element: <GroupBuilderPage /> },
+            { path: "groups/:id/edit", element: <GroupBuilderPage /> },
             { path: "surveys", element: <SurveysModule /> },
-            { path: "surveys/create", element: <SurveyBuilderPage /> },
+            { path: "surveys/create", element: <Navigate to="/admin/surveys/builder/new" replace /> },
+            { path: "surveys/builder/:surveyId", element: <SurveyBuilderPage /> },
             { path: "surveys/preview", element: <SurveyPreviewPage /> },
             { path: "surveys/report/:id", element: <SurveyReportPage /> },
             { path: "releases", element: <ReleasesModule /> },
             { path: "releases/:id/edit", element: <SurveyBuilderPage /> },
-            { path: "approvals", element: <ApprovalsModule /> },
+            { path: "approvals", element: <StudentApprovalsPage /> },
             { path: "documents", element: <DocumentsModule /> },
             { path: "allocation", element: <AllocationModule /> },
             { path: "allocation/create", element: <AllocationAddPage /> },
@@ -96,21 +104,25 @@ const router = createBrowserRouter([
     {
         path: "/student",
         element: (
-            <ProtectedRoute allowedRoles={["STUDENT"]}>
+            <ProtectedRoute allowedRoles={["USER", "STUDENT"]}>
                 <StudentLayout />
             </ProtectedRoute>
         ),
         children: [
+            { index: true, element: <Navigate to="dashboard" replace /> },
             { path: "dashboard", element: <StudentDashboard /> },
-            // Section 13: "My Commitments" dashboard
-            { path: "commitments", element: <div>My Commitments Dashboard</div> },
-            // Where students actually take the surveys
-            { path: "survey/:id", element: <div>Survey Interface</div> },
+            { path: "surveys", element: <StudentSurveysPage /> },
+            { path: "surveys/:id", element: <TakeSurveyPage /> },
+            // { path: "approvals", element: <StudentApprovalsPage /> },
+            { path: "allocation", element: <AllocationModule /> },
+            { path: "calendar", element: <CalendarModule /> },
+            { path: "action-plans", element: <ActionPlansModule /> },
+            { path: "settings", element: <SettingsModule /> },
         ],
     },
 
     // ==========================================
-    // 🔥 APPROVER ROUTES (Verification & Review)
+    // 🔥 APPROVER ROUTES (Reuse Admin UI, Data Changes Only)
     // ==========================================
     {
         path: "/approver",
@@ -120,17 +132,28 @@ const router = createBrowserRouter([
             </ProtectedRoute>
         ),
         children: [
-            { path: "dashboard", element: <ApproverDashboard /> },
+            { index: true, element: <Navigate to="dashboard" replace /> },
+            { path: "dashboard", element: <AdminDashboard /> },
+            { path: "users", element: <UsersModule /> },
+            { path: "users/create", element: <AddUserPage /> },
+            { path: "users/:id", element: <UserProfilePage /> },
+            { path: "groups", element: <GroupsModule /> },
             { path: "groups/create", element: <GroupBuilderPage /> },
+            { path: "groups/:id/edit", element: <GroupBuilderPage /> },
             { path: "surveys", element: <SurveysModule /> },
-            { path: "surveys/create", element: <SurveyBuilderPage /> },
+            { path: "surveys/create", element: <Navigate to="/approver/surveys/builder/new" replace /> },
+            { path: "surveys/builder/:surveyId", element: <SurveyBuilderPage /> },
             { path: "surveys/preview", element: <SurveyPreviewPage /> },
             { path: "surveys/report/:id", element: <SurveyReportPage /> },
+            { path: "releases", element: <ReleasesModule /> },
             { path: "releases/:id/edit", element: <SurveyBuilderPage /> },
-            // Section 6: Unified Approval Queue
-            { path: "queue", element: <div>Verification Queue</div> },
-            // Section 7: Document Repository access
-            { path: "documents", element: <div>Document Repository</div> },
+            { path: "approvals", element: <ApprovalsModule /> },
+            { path: "allocation", element: <AllocationModule /> },
+            { path: "allocation/create", element: <AllocationAddPage /> },
+            { path: "calendar", element: <CalendarModule /> },
+            { path: "action-plans", element: <ActionPlansModule /> },
+            { path: "settings", element: <SettingsModule /> },
+            // Note: Analytics and Audit Logs are intentionally omitted for approver
         ],
     },
 ]);

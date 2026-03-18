@@ -1,6 +1,3 @@
-export const useAuth = () => {
-    return {
-        user: null,
-        isAuthenticated: false,
-    };
-};
+import { useAuth as useAuthContext } from "../context/AuthContext";
+
+export const useAuth = () => useAuthContext();

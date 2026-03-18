@@ -25,7 +25,6 @@ export const ActionPlansModule = () => {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-semibold text-gray-800">Action Plans</h1>
-                    <p className="text-sm text-gray-500">Track mitigation tasks, owners, and deadlines.</p>
                 </div>
                 <div className="flex gap-2">
                     <button className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700">New Plan</button>

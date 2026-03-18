@@ -1,83 +1,178 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+    getApprovalActions,
+    getApprovalItems,
+    getApprovalSteps,
+    getApprovalWorkflows,
+    updateApprovalItem,
+} from "../../services/approvalApi";
 
 const ApprovalsModule = () => {
     const [typeFilter, setTypeFilter] = useState("All");
-    const [creatorFilter, setCreatorFilter] = useState("All");
+    const [statusFilter, setStatusFilter] = useState("All");
     const [priorityFilter, setPriorityFilter] = useState("All");
     const [searchTerm, setSearchTerm] = useState("");
 
-    const approvals = useMemo(
-        () => [
-            {
-                id: "APR-S-120",
-                title: "Hostel Preference 2026",
-                createdBy: "Student",
-                submittedAt: "2026-02-06",
-                priority: "High",
-                type: "Survey",
-                summary: "Survey draft submitted for admin approval.",
-            },
-            {
-                id: "APR-S-118",
-                title: "Internship Willingness",
-                createdBy: "Approver",
-                submittedAt: "2026-02-04",
-                priority: "Medium",
-                type: "Survey",
-                summary: "Updated questions and response window.",
-            },
-            {
-                id: "APR-R-77",
-                title: "Elective Course Bidding",
-                createdBy: "Approver",
-                submittedAt: "2026-02-03",
-                priority: "High",
-                type: "Release",
-                summary: "Release window adjustment requested.",
-            },
-            {
-                id: "APR-R-72",
-                title: "Transport Facilities Feedback",
-                createdBy: "Student",
-                submittedAt: "2026-01-31",
-                priority: "Low",
-                type: "Release",
-                summary: "New release request with restricted audience.",
-            },
-            {
-                id: "APR-A-18",
-                title: "Document verification batch",
-                createdBy: "Student",
-                submittedAt: "2026-02-02",
-                priority: "Medium",
-                type: "Activity",
-                summary: "Student activity request for verification run.",
-            },
-            {
-                id: "APR-A-14",
-                title: "Allocation run request",
-                createdBy: "Approver",
-                submittedAt: "2026-02-01",
-                priority: "High",
-                type: "Activity",
-                summary: "Approver requested allocation rerun.",
-            },
-        ],
-        []
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [actionLoadingId, setActionLoadingId] = useState(null);
+
+    const [items, setItems] = useState([]);
+    const [workflows, setWorkflows] = useState([]);
+    const [steps, setSteps] = useState([]);
+    const [actions, setActions] = useState([]);
+
+    const workflowById = useMemo(
+        () => new Map(workflows.map((workflow) => [Number(workflow.approval_workflow_id), workflow])),
+        [workflows]
     );
 
+    const stepById = useMemo(
+        () => new Map(steps.map((step) => [Number(step.approval_step_id), step])),
+        [steps]
+    );
+
+    const actionsByItem = useMemo(() => {
+        const map = new Map();
+        for (const action of actions) {
+            const key = Number(action.approval_item_id);
+            const existing = map.get(key) || [];
+            existing.push(action);
+            map.set(key, existing);
+        }
+        for (const [, value] of map) {
+            value.sort((a, b) => new Date(b.acted_at || 0).getTime() - new Date(a.acted_at || 0).getTime());
+        }
+        return map;
+    }, [actions]);
+
+    const getPriority = (item, workflow) => {
+        const status = String(item.status || "").toUpperCase();
+        if (status === "PENDING") return "High";
+
+        const requestedAt = workflow?.requested_at ? new Date(workflow.requested_at) : null;
+        if (!requestedAt) return "Low";
+
+        const ageHours = (Date.now() - requestedAt.getTime()) / (1000 * 60 * 60);
+        if (ageHours >= 24) return "High";
+        if (ageHours >= 8) return "Medium";
+        return "Low";
+    };
+
+    const formatDate = (value) => {
+        if (!value) return "-";
+        try {
+            return new Date(value).toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+            });
+        } catch {
+            return String(value);
+        }
+    };
+
+    const formatEntityType = (value) => {
+        const normalized = String(value || "").toUpperCase();
+        if (normalized === "SURVEY") return "Survey";
+        if (normalized === "RELEASE") return "Release";
+        return "Activity";
+    };
+
+    const loadApprovals = async () => {
+        try {
+            setLoading(true);
+            setError("");
+
+            const [itemsRes, workflowsRes, stepsRes, actionsRes] = await Promise.all([
+                getApprovalItems(),
+                getApprovalWorkflows(),
+                getApprovalSteps(),
+                getApprovalActions(),
+            ]);
+
+            setItems(Array.isArray(itemsRes) ? itemsRes : []);
+            setWorkflows(Array.isArray(workflowsRes) ? workflowsRes : []);
+            setSteps(Array.isArray(stepsRes) ? stepsRes : []);
+            setActions(Array.isArray(actionsRes) ? actionsRes : []);
+        } catch (err) {
+            setError(err?.message || "Failed to load approvals.");
+            setItems([]);
+            setWorkflows([]);
+            setSteps([]);
+            setActions([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadApprovals();
+    }, []);
+
+    const approvals = useMemo(() => {
+        return items.map((item) => {
+            const workflow = workflowById.get(Number(item.approval_workflow_id));
+            const step = item.approval_step_id ? stepById.get(Number(item.approval_step_id)) : null;
+            const latestAction = (actionsByItem.get(Number(item.approval_item_id)) || [])[0] || null;
+            const type = formatEntityType(item.entity_type || workflow?.entity_type);
+
+            const title = `${type} #${item.entity_id}`;
+            const summary = latestAction?.comment
+                || workflow?.comments
+                || step?.comments
+                || "Awaiting decision.";
+
+            return {
+                ...item,
+                type,
+                title,
+                summary,
+                priority: getPriority(item, workflow),
+                submittedAt: workflow?.requested_at || item.created_at,
+                requestedBy: workflow?.requested_by || "-",
+                currentStepOrder: step?.step_order || null,
+            };
+        });
+    }, [items, workflowById, stepById, actionsByItem]);
+
     const filteredApprovals = approvals.filter((item) => {
-        const matchesType = typeFilter === "All" || item.type === typeFilter;
-        const matchesCreator = creatorFilter === "All" || item.createdBy === creatorFilter;
-        const matchesPriority = priorityFilter === "All" || item.priority === priorityFilter;
+        const itemType = item.type;
+        const itemStatus = String(item.status || "").toUpperCase();
+        const itemPriority = item.priority;
+
+        const matchesType = typeFilter === "All" || itemType === typeFilter;
+        const matchesStatus = statusFilter === "All" || itemStatus === statusFilter;
+        const matchesPriority = priorityFilter === "All" || itemPriority === priorityFilter;
+
         const query = searchTerm.trim().toLowerCase();
         const matchesSearch =
-            !query ||
-            item.title.toLowerCase().includes(query) ||
-            item.id.toLowerCase().includes(query) ||
-            item.summary.toLowerCase().includes(query);
-        return matchesType && matchesCreator && matchesPriority && matchesSearch;
+            !query
+            || String(item.title || "").toLowerCase().includes(query)
+            || String(item.approval_item_id || "").toLowerCase().includes(query)
+            || String(item.summary || "").toLowerCase().includes(query)
+            || String(item.entity_id || "").toLowerCase().includes(query);
+
+        return matchesType && matchesStatus && matchesPriority && matchesSearch;
     });
+
+    const decide = async (item, decision) => {
+        try {
+            setActionLoadingId(item.approval_item_id);
+            setError("");
+
+            await updateApprovalItem(item.approval_item_id, {
+                status: decision,
+                decided_at: new Date().toISOString(),
+            });
+
+            await loadApprovals();
+        } catch (err) {
+            setError(err?.message || "Failed to update approval.");
+        } finally {
+            setActionLoadingId(null);
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -86,6 +181,8 @@ const ApprovalsModule = () => {
                     <h1 className="text-2xl font-semibold text-gray-900">Approvals</h1>
                 </div>
             </div>
+
+            {error && <div className="text-sm text-red-600">{error}</div>}
 
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
                 <div className="px-6 py-4 border-b border-gray-100 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -108,13 +205,15 @@ const ApprovalsModule = () => {
                             <option value="Activity">Activity</option>
                         </select>
                         <select
-                            value={creatorFilter}
-                            onChange={(event) => setCreatorFilter(event.target.value)}
+                            value={statusFilter}
+                            onChange={(event) => setStatusFilter(event.target.value)}
                             className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
                         >
-                            <option value="All">All Creators</option>
-                            <option value="Approver">Approver</option>
-                            <option value="Student">Student</option>
+                            <option value="All">All Status</option>
+                            <option value="PENDING">PENDING</option>
+                            <option value="APPROVED">APPROVED</option>
+                            <option value="REJECTED">REJECTED</option>
+                            <option value="CHANGES_REQUESTED">CHANGES_REQUESTED</option>
                         </select>
                         <select
                             value={priorityFilter}
@@ -136,22 +235,30 @@ const ApprovalsModule = () => {
                                     <th className="px-6 py-3 font-semibold">ID</th>
                                     <th className="px-6 py-3 font-semibold">Title</th>
                                     <th className="px-6 py-3 font-semibold">Type</th>
-                                    <th className="px-6 py-3 font-semibold">Created By</th>
+                                    <th className="px-6 py-3 font-semibold">Requested By</th>
                                     <th className="px-6 py-3 font-semibold">Priority</th>
+                                    <th className="px-6 py-3 font-semibold">Status</th>
                                     <th className="px-6 py-3 font-semibold">Submitted</th>
                                     <th className="px-6 py-3 font-semibold text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {filteredApprovals.map((item) => (
-                                    <tr key={item.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 text-xs text-gray-500">{item.id}</td>
+                                {loading && (
+                                    <tr>
+                                        <td className="px-6 py-8 text-center text-sm text-gray-500" colSpan={8}>
+                                            Loading approvals...
+                                        </td>
+                                    </tr>
+                                )}
+                                {!loading && filteredApprovals.map((item) => (
+                                    <tr key={item.approval_item_id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 text-xs text-gray-500">APR-{item.approval_item_id}</td>
                                         <td className="px-6 py-4">
                                             <div className="font-medium text-gray-900">{item.title}</div>
                                             <div className="text-xs text-gray-500 mt-1">{item.summary}</div>
                                         </td>
                                         <td className="px-6 py-4 text-gray-600">{item.type}</td>
-                                        <td className="px-6 py-4 text-gray-600">{item.createdBy}</td>
+                                        <td className="px-6 py-4 text-gray-600">{item.requestedBy}</td>
                                         <td className="px-6 py-4">
                                             <span
                                                 className={`px-2 py-1 rounded-full text-[10px] font-semibold ${item.priority === "High"
@@ -164,13 +271,16 @@ const ApprovalsModule = () => {
                                                 {item.priority}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-gray-600">{item.submittedAt}</td>
+                                        <td className="px-6 py-4 text-xs font-semibold text-gray-600">{String(item.status || "").toUpperCase()}</td>
+                                        <td className="px-6 py-4 text-gray-600">{formatDate(item.submittedAt)}</td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button
                                                     type="button"
                                                     aria-label="Approve"
-                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                                    disabled={actionLoadingId === item.approval_item_id}
+                                                    onClick={() => decide(item, "APPROVED")}
+                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
                                                 >
                                                     <svg
                                                         viewBox="0 0 24 24"
@@ -187,7 +297,9 @@ const ApprovalsModule = () => {
                                                 <button
                                                     type="button"
                                                     aria-label="Request changes"
-                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100"
+                                                    disabled={actionLoadingId === item.approval_item_id}
+                                                    onClick={() => decide(item, "CHANGES_REQUESTED")}
+                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-60"
                                                 >
                                                     <svg
                                                         viewBox="0 0 24 24"
@@ -205,7 +317,9 @@ const ApprovalsModule = () => {
                                                 <button
                                                     type="button"
                                                     aria-label="Reject"
-                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100"
+                                                    disabled={actionLoadingId === item.approval_item_id}
+                                                    onClick={() => decide(item, "REJECTED")}
+                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-60"
                                                 >
                                                     <svg
                                                         viewBox="0 0 24 24"
@@ -224,9 +338,9 @@ const ApprovalsModule = () => {
                                         </td>
                                     </tr>
                                 ))}
-                                {!filteredApprovals.length && (
+                                {!loading && !filteredApprovals.length && (
                                     <tr>
-                                        <td className="px-6 py-10 text-center text-sm text-gray-500" colSpan={7}>
+                                        <td className="px-6 py-10 text-center text-sm text-gray-500" colSpan={8}>
                                             No approvals match the selected filters.
                                         </td>
                                     </tr>

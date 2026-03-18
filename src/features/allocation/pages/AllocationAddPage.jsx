@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import UserListInput from "../../groups/components/UserListInput";
+import { useAuth } from "../../../context/AuthContext";
+import { listUsers } from "../../../services/userService";
 
 const AllocationAddPage = () => {
     const navigate = useNavigate();
+    const { token, user } = useAuth();
 
     const [title, setTitle] = useState("");
     const [allocationType, setAllocationType] = useState("");
@@ -14,10 +17,32 @@ const AllocationAddPage = () => {
     const [notes, setNotes] = useState("");
     const [teachers, setTeachers] = useState([]);
     const [students, setStudents] = useState([]);
+    const [directoryUsers, setDirectoryUsers] = useState([]);
 
     const inputClassName =
         "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none";
     const labelClassName = "text-xs font-medium text-gray-500";
+    const roleBasePath = user?.role === "APPROVER" ? "/approver" : "/admin";
+
+    useEffect(() => {
+        let active = true;
+
+        const load = async () => {
+            if (!token) return;
+            try {
+                const response = await listUsers(token);
+                if (!active) return;
+                setDirectoryUsers(Array.isArray(response) ? response : []);
+            } catch {
+                if (active) setDirectoryUsers([]);
+            }
+        };
+
+        load();
+        return () => {
+            active = false;
+        };
+    }, [token]);
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -35,7 +60,7 @@ const AllocationAddPage = () => {
         };
 
         console.log("Create allocation", payload);
-        navigate("/admin/allocation");
+        navigate(`${roleBasePath}/allocation`);
     };
 
     return (
@@ -48,7 +73,7 @@ const AllocationAddPage = () => {
                 <div className="flex flex-wrap items-center gap-3">
                     <button
                         type="button"
-                        onClick={() => navigate("/admin/allocation")}
+                        onClick={() => navigate(`${roleBasePath}/allocation`)}
                         className="border border-gray-200 px-4 py-2 rounded-xl text-sm text-gray-600 hover:bg-gray-50"
                     >
                         Cancel
@@ -153,12 +178,20 @@ const AllocationAddPage = () => {
                             label="Assign Teachers (Approvers)"
                             items={teachers}
                             setItems={setTeachers}
+                            options={directoryUsers.map((entry) => ({
+                                value: entry.email || entry.name,
+                                label: entry.email ? `${entry.name} <${entry.email}>` : entry.name,
+                            }))}
                             placeholder="Type teacher name and press Enter..."
                         />
                         <UserListInput
                             label="Assign Students"
                             items={students}
                             setItems={setStudents}
+                            options={directoryUsers.map((entry) => ({
+                                value: entry.email || entry.name,
+                                label: entry.email ? `${entry.name} <${entry.email}>` : entry.name,
+                            }))}
                             placeholder="Type student name and press Enter..."
                         />
                     </div>

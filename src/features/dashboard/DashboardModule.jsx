@@ -24,15 +24,6 @@ export const DashboardModule = () => {
                     <h1 className="text-2xl font-bold text-gray-800">Operations Home</h1>
                     <p className="text-sm text-gray-500">Overview of active surveys and system health.</p>
                 </div>
-
-                <div className="flex flex-wrap gap-2">
-                    <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
-                        <PlusIcon className="w-4 h-4" /> Create New Survey
-                    </button>
-                    <button className="flex items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
-                        <ArrowPathIcon className="w-4 h-4" /> Run Allocation
-                    </button>
-                </div>
             </div>
 
             {/* 2. Stats Grid (From SRS Page 54 Widgets) */}

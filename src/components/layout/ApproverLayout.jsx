@@ -1,28 +1,20 @@
+
+import { useState } from "react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import { Outlet } from "react-router-dom";
+import { APPROVER_NAV_LINKS } from "../../constants/navigationApprover";
 
 const ApproverLayout = () => {
-
-    const links = [
-        { name: "Dashboard", path: "/approver/dashboard" },
-        { name: "Surveys", path: "/approver/surveys" },
-        { name: "Pending Approvals", path: "/approver/approvals" },
-    ];
-
+    const [isOpen, setIsOpen] = useState(false);
     return (
-        <div className="flex bg-gray-100 min-h-screen">
-
-            <Sidebar links={links} />
-
-            <div className="flex-1 flex flex-col">
-
-                <Topbar />
-
-                <div className="p-6">
+        <div className="h-screen bg-slate-50 flex overflow-hidden">
+            <Sidebar isOpen={isOpen} setIsOpen={setIsOpen} navLinks={APPROVER_NAV_LINKS} />
+            <div className="flex-1 flex flex-col transition-all duration-300 min-h-0 md:ml-64">
+                <Topbar setIsOpen={setIsOpen} />
+                <main className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto w-full">
                     <Outlet />
-                </div>
-
+                </main>
             </div>
         </div>
     );
