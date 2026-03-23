@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import UserListInput from "../../groups/components/UserListInput";
 import { useAuth } from "../../../context/AuthContext";
 import { listUsers } from "../../../services/userService";
+import { createAllocation } from "../../../services/allocationApi";
 
 const AllocationAddPage = () => {
     const navigate = useNavigate();
@@ -18,11 +19,13 @@ const AllocationAddPage = () => {
     const [teachers, setTeachers] = useState([]);
     const [students, setStudents] = useState([]);
     const [directoryUsers, setDirectoryUsers] = useState([]);
+    const [error, setError] = useState("");
+    const [saving, setSaving] = useState(false);
 
     const inputClassName =
         "mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none";
     const labelClassName = "text-xs font-medium text-gray-500";
-    const roleBasePath = user?.role === "APPROVER" ? "/approver" : "/admin";
+    const roleBasePath = String(user?.role || "").toUpperCase() === "APPROVER" ? "/approver" : "/admin";
 
     useEffect(() => {
         let active = true;
@@ -44,23 +47,52 @@ const AllocationAddPage = () => {
         };
     }, [token]);
 
-    const handleSubmit = (event) => {
+    const toIsoFromDate = (value, end = false) => {
+        if (!value) return null;
+        return new Date(`${value}T${end ? "23:59:59" : "00:00:00"}`).toISOString();
+    };
+
+    const handleSubmit = async (event) => {
         event.preventDefault();
 
-        const payload = {
-            title,
-            type: allocationType,
-            startDate,
-            endDate,
-            location,
-            instructions,
-            notes,
-            teachers,
-            students,
-        };
+        const assigneeIds = Array.from(new Set([...teachers, ...students]))
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value) && value > 0);
 
-        console.log("Create allocation", payload);
-        navigate(`${roleBasePath}/allocation`);
+        if (!assigneeIds.length) {
+            setError("Select at least one assignee.");
+            return;
+        }
+
+        if (startDate && endDate && new Date(startDate).getTime() > new Date(endDate).getTime()) {
+            setError("End date must be on or after start date.");
+            return;
+        }
+
+        try {
+            setSaving(true);
+            setError("");
+
+            await Promise.all(
+                assigneeIds.map((assignedTo) => createAllocation({
+                    title,
+                    allocation_type: String(allocationType || "Task").toUpperCase().replace(/\s+/g, "_"),
+                    status: "ASSIGNED",
+                    start_at: toIsoFromDate(startDate, false),
+                    end_at: toIsoFromDate(endDate, true),
+                    location,
+                    instructions,
+                    notes,
+                    assigned_to: assignedTo,
+                }))
+            );
+
+            navigate(`${roleBasePath}/allocation`);
+        } catch (err) {
+            setError(err?.message || "Failed to create allocation.");
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -81,12 +113,15 @@ const AllocationAddPage = () => {
                     <button
                         type="submit"
                         form="allocation-add-form"
+                        disabled={saving}
                         className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium"
                     >
-                        Save Allocation
+                        {saving ? "Saving..." : "Save Allocation"}
                     </button>
                 </div>
             </div>
+
+            {error && <div className="text-sm text-red-600">{error}</div>}
 
             <form id="allocation-add-form" onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -113,6 +148,7 @@ const AllocationAddPage = () => {
                                 >
                                     <option value="">Select type</option>
                                     <option value="Task">Task</option>
+                                    <option value="Schedule">Schedule</option>
                                     <option value="Practical">Practical</option>
                                     <option value="Assessment">Assessment</option>
                                     <option value="Mock Interview">Mock Interview</option>
@@ -179,7 +215,7 @@ const AllocationAddPage = () => {
                             items={teachers}
                             setItems={setTeachers}
                             options={directoryUsers.map((entry) => ({
-                                value: entry.email || entry.name,
+                                value: String(entry.user_id),
                                 label: entry.email ? `${entry.name} <${entry.email}>` : entry.name,
                             }))}
                             placeholder="Type teacher name and press Enter..."
@@ -189,7 +225,7 @@ const AllocationAddPage = () => {
                             items={students}
                             setItems={setStudents}
                             options={directoryUsers.map((entry) => ({
-                                value: entry.email || entry.name,
+                                value: String(entry.user_id),
                                 label: entry.email ? `${entry.name} <${entry.email}>` : entry.name,
                             }))}
                             placeholder="Type student name and press Enter..."

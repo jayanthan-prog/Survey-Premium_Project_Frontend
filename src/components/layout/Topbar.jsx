@@ -3,6 +3,11 @@ import { Bell, CircleHelp, Moon, Sun } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { getHomePathByRole } from "../../services/authservice";
+import {
+    getMyNotifications,
+    markAllNotificationsAsRead,
+    markNotificationAsRead,
+} from "../../services/notificationApi";
 
 const Topbar = ({ setIsOpen }) => {
     const { user } = useAuth();
@@ -17,6 +22,9 @@ const Topbar = ({ setIsOpen }) => {
     const [showNotifications, setShowNotifications] = useState(false);
     const [showHelp, setShowHelp] = useState(false);
     const [isDark, setIsDark] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
     const popoverRef = useRef(null);
 
     const initials = useMemo(() => {
@@ -29,28 +37,73 @@ const Topbar = ({ setIsOpen }) => {
             .toUpperCase();
     }, [user]);
 
-    const recentNotifications = [
-        {
-            title: "New survey release opened",
-            detail: "Group A · 2m ago",
-            tone: "bg-emerald-400",
-        },
-        {
-            title: "Action plan marked overdue",
-            detail: "AP-7003 · 1h ago",
-            tone: "bg-amber-400",
-        },
-        {
-            title: "Allocation conflicts detected",
-            detail: "Block A · Today",
-            tone: "bg-rose-400",
-        },
-        {
-            title: "Approval pending review",
-            detail: "APP-5282 · Today",
-            tone: "bg-sky-400",
-        },
-    ];
+    const toRelativeTime = (value) => {
+        if (!value) return "Now";
+        const createdAt = new Date(value);
+        if (Number.isNaN(createdAt.getTime())) return "Now";
+
+        const diffMs = Date.now() - createdAt.getTime();
+        const minutes = Math.max(1, Math.floor(diffMs / 60000));
+        if (minutes < 60) return `${minutes}m ago`;
+
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+
+        const days = Math.floor(hours / 24);
+        return `${days}d ago`;
+    };
+
+    const loadNotifications = async () => {
+        try {
+            setIsLoadingNotifications(true);
+            const response = await getMyNotifications({ limit: 8 });
+            setNotifications(Array.isArray(response?.notifications) ? response.notifications : []);
+            setUnreadCount(Number(response?.unread_count || 0));
+        } catch (_err) {
+            setNotifications([]);
+            setUnreadCount(0);
+        } finally {
+            setIsLoadingNotifications(false);
+        }
+    };
+
+    useEffect(() => {
+        loadNotifications();
+    }, []);
+
+    const openNotifications = async () => {
+        setShowNotifications((prev) => !prev);
+        setShowHelp(false);
+
+        if (!showNotifications) {
+            await loadNotifications();
+        }
+    };
+
+    const handleNotificationClick = async (item) => {
+        if (!item || item.is_read) return;
+        try {
+            await markNotificationAsRead(item.notification_id);
+            setNotifications((prev) => prev.map((entry) => (
+                entry.notification_id === item.notification_id
+                    ? { ...entry, is_read: true }
+                    : entry
+            )));
+            setUnreadCount((prev) => Math.max(0, prev - 1));
+        } catch (_err) {
+            // ignore read status update failures in UI
+        }
+    };
+
+    const handleMarkAllRead = async () => {
+        try {
+            await markAllNotificationsAsRead();
+            setNotifications((prev) => prev.map((entry) => ({ ...entry, is_read: true })));
+            setUnreadCount(0);
+        } catch (_err) {
+            // ignore read-all update failures in UI
+        }
+    };
 
     useEffect(() => {
         const root = document.documentElement;
@@ -114,14 +167,16 @@ const Topbar = ({ setIsOpen }) => {
                 </button>
 
                 <button
-                    onClick={() => {
-                        setShowNotifications((prev) => !prev);
-                        setShowHelp(false);
-                    }}
+                    onClick={openNotifications}
                     className="h-10 w-10 rounded-xl text-gray-600 hover:bg-slate-100 hover:text-gray-800 transition-colors flex items-center justify-center"
                     aria-label="Notifications"
                 >
                     <Bell size={18} />
+                    {unreadCount > 0 && (
+                        <span className="absolute mt-[-20px] ml-[20px] min-w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center px-1">
+                            {unreadCount > 9 ? "9+" : unreadCount}
+                        </span>
+                    )}
                 </button>
 
                 <button
@@ -137,21 +192,34 @@ const Topbar = ({ setIsOpen }) => {
                     <div className="absolute right-12 top-12 w-80 rounded-xl border border-gray-100 bg-white shadow-2xl z-50 overflow-hidden">
                         <div className="px-4 py-3 bg-purple-500 text-white">
                             <div className="text-sm font-semibold">Notifications</div>
-                            <div className="text-xs text-slate-200">Latest activity updates</div>
+                            <div className="text-xs text-slate-200">Survey updates and reminders</div>
                         </div>
                         <div className="divide-y divide-gray-100">
-                            {recentNotifications.map((item) => (
-                                <div key={item.title} className="px-4 py-3 flex items-start gap-3 hover:bg-gray-50">
-                                    <span className={`mt-1 h-2.5 w-2.5 rounded-full ${item.tone}`} />
+                            {isLoadingNotifications && (
+                                <div className="px-4 py-3 text-xs text-gray-500">Loading notifications...</div>
+                            )}
+
+                            {!isLoadingNotifications && notifications.length === 0 && (
+                                <div className="px-4 py-3 text-xs text-gray-500">No notifications yet.</div>
+                            )}
+
+                            {!isLoadingNotifications && notifications.map((item) => (
+                                <button
+                                    key={item.notification_id}
+                                    onClick={() => handleNotificationClick(item)}
+                                    className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-gray-50"
+                                >
+                                    <span className={`mt-1 h-2.5 w-2.5 rounded-full ${item.is_read ? "bg-slate-300" : "bg-rose-500"}`} />
                                     <div>
                                         <div className="text-sm font-medium text-gray-800">{item.title}</div>
-                                        <div className="text-xs text-gray-500">{item.detail}</div>
+                                        <div className="text-xs text-gray-500">{item.message}</div>
+                                        <div className="text-[11px] text-gray-400 mt-1">{toRelativeTime(item.created_at)}</div>
                                     </div>
-                                </div>
+                                </button>
                             ))}
                         </div>
-                        <button className="w-full text-xs font-semibold text-purple-600 py-2 hover:bg-purple-50">
-                            See all activity
+                        <button onClick={handleMarkAllRead} className="w-full text-xs font-semibold text-purple-600 py-2 hover:bg-purple-50">
+                            Mark all as read
                         </button>
                     </div>
                 )}

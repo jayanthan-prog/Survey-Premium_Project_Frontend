@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, Paperclip, X } from "lucide-react";
+import { FileUp, Paperclip, Star, X } from "lucide-react";
 import { getSurveyById, submitSurvey } from "../../services/surveyApi";
 
 const normalizeQuestionType = (value) => String(value || "").trim().toLowerCase().replace(/[-\s]+/g, "_");
@@ -121,6 +121,9 @@ export default function TakeSurveyPage() {
     const [submitted, setSubmitted] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
+
+    const fieldClass = "w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition";
+    const subtleFieldClass = "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-slate-800 shadow-sm outline-none transition-all duration-200 focus:border-transparent focus:ring-2 focus:ring-purple-500 focus:bg-white";
 
     const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -304,6 +307,34 @@ export default function TakeSurveyPage() {
         [pageQuestions, visibleQuestionIds]
     );
 
+    const totalQuestions = useMemo(() => {
+        if (Array.isArray(questions) && questions.length) return questions.length;
+        return visibleQuestions.length;
+    }, [questions, visibleQuestions]);
+
+    const answeredCount = useMemo(
+        () => visibleQuestions.filter((q) => hasValue(answers[String(q.id)])).length,
+        [visibleQuestions, answers]
+    );
+
+    useEffect(() => {
+        const cards = document.querySelectorAll('[data-question-card="true"]');
+        cards.forEach((card, index) => {
+            card.animate(
+                [
+                    { opacity: 0, transform: "translateY(10px)" },
+                    { opacity: 1, transform: "translateY(0)" },
+                ],
+                {
+                    duration: 220,
+                    easing: "ease-out",
+                    delay: index * 35,
+                    fill: "both",
+                }
+            );
+        });
+    }, [currentPageIndex, visibleQuestions]);
+
     useEffect(() => {
         setAnswers((prev) => {
             let changed = false;
@@ -323,7 +354,7 @@ export default function TakeSurveyPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Validate current page questions
+        // Validate all questions in current page
         for (const question of visibleQuestions) {
             const questionId = String(question.id);
             const questionType = normalizeQuestionType(question.type);
@@ -369,7 +400,7 @@ export default function TakeSurveyPage() {
             }
         }
 
-        // If not on last page, go to next
+        // If there are more pages, continue to next page
         if (currentPageIndex < pages.length - 1) {
             goToNextPage();
             return;
@@ -441,18 +472,18 @@ export default function TakeSurveyPage() {
     };
 
     if (loading) {
-        return <div className="text-sm text-gray-500">Loading survey...</div>;
+        return <div className="mx-auto mt-12 max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">Loading survey...</div>;
     }
 
     if (error && !survey) {
         return (
-            <div className="max-w-2xl mx-auto bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-8">
-                <h1 className="text-xl font-semibold text-gray-800">Take Survey</h1>
-                <div className="mt-2 text-sm text-red-600">{error}</div>
+            <div className="mx-auto mt-8 max-w-3xl rounded-2xl border border-rose-200 bg-rose-50/60 p-6 shadow-sm">
+                <h1 className="text-xl font-semibold text-rose-900">Take Survey</h1>
+                <div className="mt-2 text-sm text-rose-700">{error}</div>
                 <button
                     type="button"
                     onClick={() => navigate("/student/surveys")}
-                    className="mt-4 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm"
+                    className="mt-4 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
                 >
                     Back to Surveys
                 </button>
@@ -461,332 +492,347 @@ export default function TakeSurveyPage() {
     }
 
     return (
-        <div className="max-w-2xl mx-auto bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-8">
-            <h1 className="text-2xl font-bold text-gray-800 mb-6">{survey?.title || "Survey"}</h1>
-            <form onSubmit={handleSubmit} className="space-y-6">
-                {visibleQuestions.map((q) => (
-                    <div key={q.id} className="space-y-2">
-                        {(() => {
-                            const questionType = normalizeQuestionType(q.type);
+        <div className="min-h-screen bg-gray-50 flex justify-center px-4 py-8 sm:px-6 sm:py-10">
+            <div className="w-full max-w-3xl px-0 sm:px-2">
+                <div className="mb-8 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-purple-50 p-6">
+                    <h1 className="text-3xl font-bold text-gray-800">Student Survey</h1>
+                    <p className="text-gray-500 mt-2">Please fill out the following questions.</p>
+                    {survey?.title && <p className="text-sm text-indigo-600 mt-2 font-medium">{survey.title}</p>}
+                </div>
 
-                            return (
-                                <>
-                                    <label className="block text-sm font-medium text-gray-700">{q.text}{q.required && <span className="text-red-500">*</span>}</label>
-                                    {questionType === "short_text" && (
-                                        <input className="w-full border rounded-lg px-3 py-2" value={answers[String(q.id)] || ""} onChange={e => handleChange(q.id, e.target.value)} required={q.required} />
-                                    )}
-                                    {questionType === "long_text" && (
-                                        <textarea
-                                            rows={4}
-                                            className="w-full border rounded-lg px-3 py-2"
-                                            value={answers[String(q.id)] || ""}
-                                            onChange={(e) => handleChange(q.id, e.target.value)}
-                                            required={q.required}
-                                        />
-                                    )}
-                                    {questionType === "multiple_choice" && (
-                                        <div className="flex flex-col gap-1">
-                                            {(Array.isArray(q.options) ? q.options : []).map(opt => (
-                                                <label key={opt} className="flex items-center gap-2">
-                                                    <input type="checkbox" value={opt} checked={Array.isArray(answers[String(q.id)]) && answers[String(q.id)].includes(opt)} onChange={e => {
-                                                        let arr = Array.isArray(answers[String(q.id)]) ? [...answers[String(q.id)]] : [];
-                                                        if (e.target.checked) arr.push(opt); else arr = arr.filter(o => o !== opt);
-                                                        handleChange(q.id, arr);
-                                                    }} />
-                                                    {opt}
-                                                </label>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {questionType === "single_choice" && (
-                                        <div className="flex flex-col gap-1">
-                                            {(Array.isArray(q.options) ? q.options : []).map(opt => (
-                                                <label key={opt} className="flex items-center gap-2">
-                                                    <input type="radio" name={`q${q.id}`} value={opt} checked={answers[String(q.id)] === opt} onChange={e => handleChange(q.id, opt)} />
-                                                    {opt}
-                                                </label>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {questionType === "rating" && (
-                                        <input
-                                            type="number"
-                                            min={q.scaleMin || 1}
-                                            max={q.scaleMax || 5}
-                                            className="w-full border rounded-lg px-3 py-2"
-                                            value={answers[String(q.id)] ?? ""}
-                                            onChange={(e) => handleChange(q.id, Number(e.target.value))}
-                                            required={q.required}
-                                        />
-                                    )}
-                                    {questionType === "file_upload" && (
-                                        <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-purple-50 p-4 space-y-3">
-                                            <div className="flex items-start gap-3">
-                                                <div className="mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm border border-indigo-100">
+                <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div className="flex justify-between text-sm text-gray-500 mb-1">
+                        <span>Progress</span>
+                        <span>{answeredCount} / {totalQuestions}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div className="bg-indigo-600 h-2 rounded-full transition-all duration-300" style={{ width: `${totalQuestions ? (answeredCount / totalQuestions) * 100 : 0}%` }} />
+                    </div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="px-1 py-2">
+                    {visibleQuestions.map((q, index) => (
+                        <div key={q.id} data-question-card="true" className="mb-6 space-y-4 rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-gray-50 p-6 shadow-sm transition-all duration-200 hover:shadow-md">
+                            {(() => {
+                                const questionType = normalizeQuestionType(q.type);
+
+                                return (
+                                    <>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">{index + 1}. {q.text}</label>
+                                        {q.required && <span className="inline-block ml-1 text-xs bg-red-100 text-red-500 px-2 py-1 rounded-full">Required</span>}
+                                        {questionType === "short_text" && (
+                                            <input className={fieldClass} value={answers[String(q.id)] || ""} onChange={e => handleChange(q.id, e.target.value)} required={q.required} />
+                                        )}
+                                        {questionType === "long_text" && (
+                                            <textarea
+                                                rows={4}
+                                                className={fieldClass}
+                                                value={answers[String(q.id)] || ""}
+                                                onChange={(e) => handleChange(q.id, e.target.value)}
+                                                required={q.required}
+                                            />
+                                        )}
+                                        {questionType === "multiple_choice" && (
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {(Array.isArray(q.options) ? q.options : []).map(opt => (
+                                                    <label key={opt} className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-slate-700 transition-all hover:border-purple-400 hover:bg-purple-50">
+                                                        <input className="h-4 w-4 rounded accent-purple-600" type="checkbox" value={opt} checked={Array.isArray(answers[String(q.id)]) && answers[String(q.id)].includes(opt)} onChange={e => {
+                                                            let arr = Array.isArray(answers[String(q.id)]) ? [...answers[String(q.id)]] : [];
+                                                            if (e.target.checked) arr.push(opt); else arr = arr.filter(o => o !== opt);
+                                                            handleChange(q.id, arr);
+                                                        }} />
+                                                        {opt}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {questionType === "single_choice" && (
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {(Array.isArray(q.options) ? q.options : []).map(opt => (
+                                                    <label key={opt} className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-slate-700 transition-all hover:border-purple-400 hover:bg-purple-50">
+                                                        <input className="h-4 w-4 accent-purple-600" type="radio" name={`q${q.id}`} value={opt} checked={answers[String(q.id)] === opt} onChange={e => handleChange(q.id, opt)} />
+                                                        {opt}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {questionType === "rating" && (
+                                            <div className="flex items-center gap-2 mt-3">
+                                                {Array.from({ length: Math.max(1, q.scaleMax || 5) }, (_, i) => i + 1).map((n) => (
+                                                    <button
+                                                        key={n}
+                                                        type="button"
+                                                        onClick={() => handleChange(q.id, n)}
+                                                        className={`p-1 transition ${Number(answers[String(q.id)]) >= Number(n)
+                                                            ? "text-yellow-400"
+                                                            : "text-gray-300 hover:text-yellow-400"
+                                                            } hover:scale-110`}
+                                                    >
+                                                        <Star size={22} fill="currentColor" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {questionType === "file_upload" && (
+                                            <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-green-400 transition">
+                                                <div className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-green-600 shadow-sm">
                                                     <FileUp size={18} />
                                                 </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="text-sm font-semibold text-indigo-900">Upload supporting file</div>
-                                                    <div className="text-xs text-indigo-700">Allowed: PDF, images, docs. Max size depends on server limits.</div>
-                                                </div>
-                                            </div>
+                                                <div className="mt-2 text-sm font-semibold text-gray-800">Upload supporting file</div>
+                                                <div className="text-xs text-gray-600">Drag & drop your file here</div>
+                                                <div className="mt-1 text-xs text-gray-500">Allowed: PDF, images, docs. Max size depends on server limits.</div>
 
-                                            <input
-                                                id={`file-input-${q.id}`}
-                                                type="file"
-                                                className="hidden"
-                                                onChange={(e) => handleFileChange(q.id, e.target.files?.[0] || null)}
-                                            />
-                                            <label
-                                                htmlFor={`file-input-${q.id}`}
-                                                className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-                                            >
-                                                <Paperclip size={14} />
-                                                Choose file
-                                            </label>
-
-                                            {answers[String(q.id)]?.file_name && (
-                                                <div className="flex items-center justify-between gap-3 rounded-lg border border-indigo-200 bg-white px-3 py-2">
-                                                    <div className="min-w-0">
-                                                        <div className="truncate text-sm font-medium text-gray-800">{answers[String(q.id)].file_name}</div>
-                                                        <div className="text-xs text-gray-500">{formatBytes(answers[String(q.id)].size_bytes)}</div>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleFileChange(q.id, null)}
-                                                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50"
-                                                        aria-label="Remove selected file"
+                                                <div className="mt-3">
+                                                    <label
+                                                        htmlFor={`file-input-${q.id}`}
+                                                        className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                                                     >
-                                                        <X size={14} />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </>
-                            );
-                        })()}
-                    </div>
-                ))}
-                {questionType === "dropdown" && (
-                    <select
-                        className="w-full border rounded-lg px-3 py-2"
-                        value={answers[String(q.id)] || ""}
-                        onChange={(e) => handleChange(q.id, e.target.value)}
-                        required={q.required}
-                    >
-                        <option value="">-- Select an option --</option>
-                        {(Array.isArray(q.options) ? q.options : []).map((opt) => (
-                            <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                    </select>
-                )}
-                {questionType === "date" && (
-                    <input
-                        type="date"
-                        className="w-full border rounded-lg px-3 py-2"
-                        value={answers[String(q.id)] || ""}
-                        onChange={(e) => handleChange(q.id, e.target.value)}
-                        required={q.required}
-                    />
-                )}
-                {questionType === "number" && (
-                    <input
-                        type="number"
-                        min={q.min}
-                        max={q.max}
-                        step="1"
-                        className="w-full border rounded-lg px-3 py-2"
-                        value={answers[String(q.id)] ?? ""}
-                        onChange={(e) => handleChange(q.id, e.target.value ? Number(e.target.value) : "")}
-                        required={q.required}
-                        placeholder={q.min != null && q.max != null ? `${q.min}-${q.max}` : ""}
-                    />
-                )}
-                {questionType === "matrix" && (
-                    <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
-                            <thead>
-                                <tr>
-                                    <th className="border border-gray-300 bg-gray-50 px-3 py-2 text-left text-sm font-medium"></th>
-                                    {(Array.isArray(q.columns) ? q.columns : []).map((col) => (
-                                        <th key={col.id || col} className="border border-gray-300 bg-gray-50 px-3 py-2 text-center text-sm font-medium">
-                                            {col.text || col}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(Array.isArray(q.rows) ? q.rows : []).map((row) => (
-                                    <tr key={row.id || row}>
-                                        <td className="border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium">
-                                            {row.text || row}
-                                        </td>
-                                        {(Array.isArray(q.columns) ? q.columns : []).map((col) => (
-                                            <td key={`${row.id || row}-${col.id || col}`} className="border border-gray-300 px-3 py-2 text-center">
-                                                <input
-                                                    type="radio"
-                                                    name={`matrix-${q.id}-${row.id || row}`}
-                                                    value={col.id || col}
-                                                    checked={(answers[String(q.id)] || {})[String(row.id || row)] === (col.id || col)}
-                                                    onChange={() => {
-                                                        const matrixVal = answers[String(q.id)] || {};
-                                                        handleChange(q.id, { ...matrixVal, [String(row.id || row)]: col.id || col });
-                                                    }}
-                                                />
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {groups.map((group) => {
-                    const groupKey = String(group.id);
-                    const memberArray = Array.isArray(answers[groupKey]) ? answers[groupKey] : [];
-
-                    return (
-                        <div key={group.id} className="space-y-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-                            <h3 className="text-lg font-semibold text-blue-900">{group.label}</h3>
-
-                            {memberArray.map((member, memberIdx) => (
-                                <div key={memberIdx} className="space-y-3 rounded-lg border border-blue-200 bg-white p-4">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <div className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-semibold">
-                                            {memberIdx + 1}
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-700">
-                                            Item {memberIdx + 1} of {memberArray.length}
-                                        </span>
-                                    </div>
-
-                                    <div className="grid gap-3 md:grid-cols-2">
-                                        {group.questions.map((q) => {
-                                            const qType = normalizeQuestionType(q.type);
-                                            const qId = String(q.id || "");
-                                            const memberValue = member[qId] ?? "";
-
-                                            return (
-                                                <div key={qId} className="space-y-1">
-                                                    <label className="block text-sm font-medium text-gray-700">
-                                                        {q.text}
-                                                        {q.required && <span className="text-red-500">*</span>}
+                                                        <Paperclip size={14} />
+                                                        Choose File
                                                     </label>
-
-                                                    {qType === "short_text" && (
-                                                        <input
-                                                            className="w-full border rounded-lg px-3 py-2 text-sm"
-                                                            value={memberValue}
-                                                            onChange={(e) => updateGroupMember(group.id, memberIdx, qId, e.target.value)}
-                                                            required={q.required}
-                                                            placeholder={q.placeholder || ""}
-                                                        />
-                                                    )}
-
-                                                    {qType === "long_text" && (
-                                                        <textarea
-                                                            rows={3}
-                                                            className="w-full border rounded-lg px-3 py-2 text-sm"
-                                                            value={memberValue}
-                                                            onChange={(e) => updateGroupMember(group.id, memberIdx, qId, e.target.value)}
-                                                            required={q.required}
-                                                            placeholder={q.placeholder || ""}
-                                                        />
-                                                    )}
-
-                                                    {qType === "single_choice" && (
-                                                        <select
-                                                            className="w-full border rounded-lg px-3 py-2 text-sm"
-                                                            value={memberValue}
-                                                            onChange={(e) => updateGroupMember(group.id, memberIdx, qId, e.target.value)}
-                                                            required={q.required}
-                                                        >
-                                                            <option value="">Select an option</option>
-                                                            {(Array.isArray(q.options) ? q.options : []).map((opt) => (
-                                                                <option key={opt} value={opt}>{opt}</option>
-                                                            ))}
-                                                        </select>
-                                                    )}
-
-                                                    {qType === "multiple_choice" && (
-                                                        <div className="flex flex-col gap-1">
-                                                            {(Array.isArray(q.options) ? q.options : []).map((opt) => (
-                                                                <label key={opt} className="flex items-center gap-2 text-sm">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={Array.isArray(memberValue) && memberValue.includes(opt)}
-                                                                        onChange={(e) => {
-                                                                            let arr = Array.isArray(memberValue) ? [...memberValue] : [];
-                                                                            if (e.target.checked) {
-                                                                                arr.push(opt);
-                                                                            } else {
-                                                                                arr = arr.filter(o => o !== opt);
-                                                                            }
-                                                                            updateGroupMember(group.id, memberIdx, qId, arr);
-                                                                        }}
-                                                                    />
-                                                                    {opt}
-                                                                </label>
-                                                            ))}
-                                                        </div>
-                                                    )}
-
-                                                    {qType === "rating" && (
-                                                        <input
-                                                            type="number"
-                                                            min={q.scaleMin || 1}
-                                                            max={q.scaleMax || 5}
-                                                            className="w-full border rounded-lg px-3 py-2 text-sm"
-                                                            value={memberValue ?? ""}
-                                                            onChange={(e) => updateGroupMember(group.id, memberIdx, qId, Number(e.target.value))}
-                                                            required={q.required}
-                                                        />
-                                                    )}
                                                 </div>
-                                            );
-                                        })}
+
+                                                <input
+                                                    id={`file-input-${q.id}`}
+                                                    type="file"
+                                                    className="hidden"
+                                                    onChange={(e) => handleFileChange(q.id, e.target.files?.[0] || null)}
+                                                />
+
+                                                {answers[String(q.id)]?.file_name && (
+                                                    <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-left">
+                                                        <div className="min-w-0">
+                                                            <div className="truncate text-sm font-medium text-gray-800">{answers[String(q.id)].file_name}</div>
+                                                            <div className="text-xs text-gray-500">{formatBytes(answers[String(q.id)].size_bytes)}</div>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleFileChange(q.id, null)}
+                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50"
+                                                            aria-label="Remove selected file"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {questionType === "dropdown" && (
+                                            <select
+                                                className={fieldClass}
+                                                value={answers[String(q.id)] || ""}
+                                                onChange={(e) => handleChange(q.id, e.target.value)}
+                                                required={q.required}
+                                            >
+                                                <option value="">-- Select an option --</option>
+                                                {(Array.isArray(q.options) ? q.options : []).map((opt) => (
+                                                    <option key={opt} value={opt}>{opt}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                        {questionType === "date" && (
+                                            <input
+                                                type="date"
+                                                className={fieldClass}
+                                                value={answers[String(q.id)] || ""}
+                                                onChange={(e) => handleChange(q.id, e.target.value)}
+                                                required={q.required}
+                                            />
+                                        )}
+                                        {questionType === "number" && (
+                                            <input
+                                                type="number"
+                                                min={q.min}
+                                                max={q.max}
+                                                step="1"
+                                                className={fieldClass}
+                                                value={answers[String(q.id)] ?? ""}
+                                                onChange={(e) => handleChange(q.id, e.target.value ? Number(e.target.value) : "")}
+                                                required={q.required}
+                                                placeholder={q.min != null && q.max != null ? `${q.min}-${q.max}` : ""}
+                                            />
+                                        )}
+                                        {questionType === "matrix" && (
+                                            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                                                <table className="w-full border-collapse">
+                                                    <thead>
+                                                        <tr>
+                                                            <th className="border border-gray-300 bg-gray-50 px-3 py-2 text-left text-sm font-medium"></th>
+                                                            {(Array.isArray(q.columns) ? q.columns : []).map((col) => (
+                                                                <th key={col.id || col} className="border border-gray-300 bg-gray-50 px-3 py-2 text-center text-sm font-medium">
+                                                                    {col.text || col}
+                                                                </th>
+                                                            ))}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {(Array.isArray(q.rows) ? q.rows : []).map((row) => (
+                                                            <tr key={row.id || row}>
+                                                                <td className="border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium">
+                                                                    {row.text || row}
+                                                                </td>
+                                                                {(Array.isArray(q.columns) ? q.columns : []).map((col) => (
+                                                                    <td key={`${row.id || row}-${col.id || col}`} className="border border-gray-300 px-3 py-2 text-center">
+                                                                        <input
+                                                                            className="h-4 w-4 border-slate-300 text-purple-600 focus:ring-purple-500"
+                                                                            type="radio"
+                                                                            name={`matrix-${q.id}-${row.id || row}`}
+                                                                            value={col.id || col}
+                                                                            checked={(answers[String(q.id)] || {})[String(row.id || row)] === (col.id || col)}
+                                                                            onChange={() => {
+                                                                                const matrixVal = answers[String(q.id)] || {};
+                                                                                handleChange(q.id, { ...matrixVal, [String(row.id || row)]: col.id || col });
+                                                                            }}
+                                                                        />
+                                                                    </td>
+                                                                ))}
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
+                        </div>
+                    ))}
+
+                    {groups.map((group) => {
+                        const groupKey = String(group.id);
+                        const memberArray = Array.isArray(answers[groupKey]) ? answers[groupKey] : [];
+
+                        return (
+                            <div key={group.id} className="space-y-4 rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-cyan-50 p-4 sm:p-5">
+                                <h3 className="text-lg font-semibold text-blue-900">{group.label}</h3>
+
+                                {memberArray.map((member, memberIdx) => (
+                                    <div key={memberIdx} className="space-y-3 rounded-lg border border-blue-200 bg-white p-4">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-blue-600 text-white text-xs font-semibold">
+                                                {memberIdx + 1}
+                                            </div>
+                                            <span className="text-sm font-medium text-gray-700">
+                                                Item {memberIdx + 1} of {memberArray.length}
+                                            </span>
+                                        </div>
+
+                                        <div className="grid gap-3 md:grid-cols-2">
+                                            {group.questions.map((q) => {
+                                                const qType = normalizeQuestionType(q.type);
+                                                const qId = String(q.id || "");
+                                                const memberValue = member[qId] ?? "";
+
+                                                return (
+                                                    <div key={qId} className="space-y-1.5">
+                                                        <label className="block text-sm font-medium text-slate-700">
+                                                            {q.text}
+                                                            {q.required && <span className="text-red-500">*</span>}
+                                                        </label>
+
+                                                        {qType === "short_text" && (
+                                                            <input
+                                                                className={subtleFieldClass}
+                                                                value={memberValue}
+                                                                onChange={(e) => updateGroupMember(group.id, memberIdx, qId, e.target.value)}
+                                                                required={q.required}
+                                                                placeholder={q.placeholder || ""}
+                                                            />
+                                                        )}
+
+                                                        {qType === "long_text" && (
+                                                            <textarea
+                                                                rows={3}
+                                                                className={subtleFieldClass}
+                                                                value={memberValue}
+                                                                onChange={(e) => updateGroupMember(group.id, memberIdx, qId, e.target.value)}
+                                                                required={q.required}
+                                                                placeholder={q.placeholder || ""}
+                                                            />
+                                                        )}
+
+                                                        {qType === "single_choice" && (
+                                                            <select
+                                                                className={subtleFieldClass}
+                                                                value={memberValue}
+                                                                onChange={(e) => updateGroupMember(group.id, memberIdx, qId, e.target.value)}
+                                                                required={q.required}
+                                                            >
+                                                                <option value="">Select an option</option>
+                                                                {(Array.isArray(q.options) ? q.options : []).map((opt) => (
+                                                                    <option key={opt} value={opt}>{opt}</option>
+                                                                ))}
+                                                            </select>
+                                                        )}
+
+                                                        {qType === "multiple_choice" && (
+                                                            <div className="flex flex-col gap-1">
+                                                                {(Array.isArray(q.options) ? q.options : []).map((opt) => (
+                                                                    <label key={opt} className="flex items-center gap-2 text-sm">
+                                                                        <input
+                                                                            className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                                                                            type="checkbox"
+                                                                            checked={Array.isArray(memberValue) && memberValue.includes(opt)}
+                                                                            onChange={(e) => {
+                                                                                let arr = Array.isArray(memberValue) ? [...memberValue] : [];
+                                                                                if (e.target.checked) {
+                                                                                    arr.push(opt);
+                                                                                } else {
+                                                                                    arr = arr.filter(o => o !== opt);
+                                                                                }
+                                                                                updateGroupMember(group.id, memberIdx, qId, arr);
+                                                                            }}
+                                                                        />
+                                                                        {opt}
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
+                                                        {qType === "rating" && (
+                                                            <input
+                                                                type="number"
+                                                                min={q.scaleMin || 1}
+                                                                max={q.scaleMax || 5}
+                                                                className={subtleFieldClass}
+                                                                value={memberValue ?? ""}
+                                                                onChange={(e) => updateGroupMember(group.id, memberIdx, qId, Number(e.target.value))}
+                                                                required={q.required}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    );
-                })}
-
-                {config.otpRequired && (
-                    <div className="space-y-2 rounded-xl border border-amber-100 bg-amber-50 p-4">
-                        <label className="block text-sm font-medium text-amber-800">OTP Verification</label>
-                        <input
-                            className="w-full rounded-lg border border-amber-200 px-3 py-2"
-                            value={otp}
-                            onChange={(e) => setOtp(e.target.value)}
-                            placeholder="Enter the 6-digit OTP"
-                            required
-                        />
-                        <div className="text-xs text-amber-700">This survey requires a valid OTP generated by the admin within the last 10 seconds.</div>
-                    </div>
-                )}
-                {error && <div className="text-sm text-red-600">{error}</div>}
-
-                {pages.length > 1 && (
-                    <div className="space-y-3 mt-4">
-                        <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-medium text-gray-700">Page {currentPageIndex + 1} of {pages.length}</span>
-                            <div className="flex-1 ml-4 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-purple-600 transition-all duration-300" style={{ width: `${((currentPageIndex + 1) / pages.length) * 100}%` }} />
+                                ))}
                             </div>
-                        </div>
-                    </div>
-                )}
+                        );
+                    })}
 
-                <div className="flex gap-3 mt-6">
-                    <button type="button" onClick={goToPreviousPage} disabled={currentPageIndex === 0 || submitting} className="px-6 py-2 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50">Previous</button>
-                    <button type="button" onClick={goToNextPage} disabled={currentPageIndex === pages.length - 1 || submitting} className="flex-1 px-6 py-2 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">Next</button>
-                    {currentPageIndex === pages.length - 1 && <button disabled={submitting} type="submit" className="flex-1 px-6 py-2 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60">{submitting ? "Submitting..." : "Submit"}</button>}
-                </div>
-                {submitted && <div className="text-green-600 mt-2">Survey submitted! Redirecting...</div>}
-            </form>
+                    {config.otpRequired && (
+                        <div className="space-y-2 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 p-4">
+                            <label className="block text-sm font-semibold text-amber-900">OTP Verification</label>
+                            <input
+                                className="w-full rounded-xl border border-amber-300 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                placeholder="Enter the 6-digit OTP"
+                                required
+                            />
+                            <div className="text-xs text-amber-700">This survey requires a valid OTP generated by the admin within the last 10 seconds.</div>
+                        </div>
+                    )}
+                    {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700">{error}</div>}
+
+                    <div className="flex justify-between mt-8">
+                        <button type="button" onClick={goToPreviousPage} disabled={currentPageIndex === 0 || submitting} className="px-5 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">Previous</button>
+                        {currentPageIndex < pages.length - 1 && <button type="button" onClick={goToNextPage} disabled={submitting} className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">Next</button>}
+                        {currentPageIndex === pages.length - 1 && <button disabled={submitting} type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-lg mt-6 disabled:opacity-60">{submitting ? "Submitting..." : "Submit Survey"}</button>}
+                    </div>
+                    {submitted && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700">Survey submitted! Redirecting...</div>}
+                </form>
+            </div>
         </div>
     );
 }

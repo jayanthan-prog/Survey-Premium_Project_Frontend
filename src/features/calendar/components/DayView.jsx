@@ -6,6 +6,8 @@ const DayView = ({ date, events, onSelectDate }) => {
     const dayStart = startOfDay(date);
     const dayEnd = endOfDay(date);
     const dayEvents = events.filter((event) => eventOverlapsRange(event, dayStart, dayEnd));
+    const allDayEvents = dayEvents.filter((event) => event.allDay);
+    const timedEvents = dayEvents.filter((event) => !event.allDay);
 
     return (
         <div className="flex flex-col h-full min-h-0">
@@ -30,11 +32,26 @@ const DayView = ({ date, events, onSelectDate }) => {
 
             {/* Scrollable Timeline */}
             <div className="flex-1 overflow-auto border border-slate-200 rounded-xl bg-white shadow-sm custom-scrollbar">
+                <div className="border-b border-slate-100 bg-slate-50/40 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">All-day mapped events</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        {allDayEvents.length ? allDayEvents.map((event) => (
+                            <span
+                                key={`allday-${event.id}`}
+                                className={`rounded-full px-2 py-1 text-[10px] font-semibold ${getTypeBadge(event.type)}`}
+                            >
+                                {event.type}: {event.title}
+                            </span>
+                        )) : (
+                            <span className="text-[10px] text-slate-400">No all-day events for this date.</span>
+                        )}
+                    </div>
+                </div>
                 <div className="w-full relative">
                     {hours.map((hour) => {
                         const hourStart = setHour(dayStart, hour);
                         const hourEnd = setHour(dayStart, hour + 1);
-                        const hourEvents = dayEvents.filter((event) =>
+                        const hourEvents = timedEvents.filter((event) =>
                             eventOverlapsRange(event, hourStart, hourEnd)
                         );
 

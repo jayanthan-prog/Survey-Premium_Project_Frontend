@@ -42,8 +42,8 @@ const YearView = ({ months, events, onSelectDate }) => {
                                         key={day.toISOString()}
                                         onClick={() => onSelectDate(day)}
                                         className={`rounded-md border px-1 py-1 text-[10px] text-slate-500 ${isSameMonth(day, month.start)
-                                                ? "border-slate-100"
-                                                : "border-transparent"
+                                            ? "border-slate-100"
+                                            : "border-transparent"
                                             }`}
                                     >
                                         <div className="flex items-center justify-between">
@@ -57,6 +57,26 @@ const YearView = ({ months, events, onSelectDate }) => {
                                     </button>
                                 );
                             })}
+                        </div>
+
+                        <div className="mt-3 border-t border-slate-100 pt-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mapped items</p>
+                            <div className="mt-1 space-y-1">
+                                {events
+                                    .filter((event) => {
+                                        const eventStart = new Date(event.start);
+                                        return (
+                                            eventStart.getFullYear() === month.start.getFullYear()
+                                            && eventStart.getMonth() === month.start.getMonth()
+                                        );
+                                    })
+                                    .slice(0, 3)
+                                    .map((event) => (
+                                        <div key={`m-${month.label}-${event.id}`} className="text-[10px] text-slate-600 truncate">
+                                            {event.type}: {event.title}
+                                        </div>
+                                    ))}
+                            </div>
                         </div>
                     </div>
                 ))}

@@ -48,9 +48,7 @@ const MonthView = ({ days, selectedDate, events, onSelectDate }) => {
                                             event.type
                                         )}`}
                                     >
-                                        {event.type === "Survey" && "🔵"}
-                                        {event.type === "Assessment" && "🔷"}
-                                        {event.type === "Activity" && "🟢"} {event.title}
+                                        {event.type}: {event.title}
                                     </div>
                                 ))}
                                 {dayEvents.length > 3 && (

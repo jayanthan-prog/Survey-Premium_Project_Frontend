@@ -25,4 +25,9 @@ export const getApprovalWorkflows = () => request("/api/approvals/workflows", "G
 export const getApprovalSteps = () => request("/api/approvals/steps", "GET");
 export const getApprovalActions = () => request("/api/approvals/actions", "GET");
 
+export const createApprovalWorkflow = (data) => request("/api/approvals/workflows", "POST", data);
+export const createApprovalItem = (data) => request("/api/approvals/items", "POST", data);
+export const createApprovalAction = (data) => request("/api/approvals/actions", "POST", data);
+
+export const updateApprovalWorkflow = (id, data) => request(`/api/approvals/workflows/${id}`, "PUT", data);
 export const updateApprovalItem = (id, data) => request(`/api/approvals/items/${id}`, "PUT", data);

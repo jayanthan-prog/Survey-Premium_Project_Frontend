@@ -20,7 +20,6 @@ import SurveyPreviewPage from "../features/surveys/pages/SurveyPreviewPage";
 import SurveyReportPage from "../features/surveys/pages/SurveyReportPage";
 import ReleasesModule from "../features/releases/ReleasesModule";
 import ApprovalsModule from "../features/approvals/ApprovalsModule";
-import StudentApprovalsPage from "../pages/student/StudentApprovalsPage";
 import DocumentsModule from "../features/documents/DocumentsModule";
 import AllocationModule from "../features/allocation/AllocationModule";
 import CalendarModule from "../features/calendar/CalendarModule";
@@ -84,7 +83,7 @@ const router = createBrowserRouter([
             { path: "surveys/report/:id", element: <SurveyReportPage /> },
             { path: "releases", element: <ReleasesModule /> },
             { path: "releases/:id/edit", element: <SurveyBuilderPage /> },
-            { path: "approvals", element: <StudentApprovalsPage /> },
+            { path: "approvals", element: <ApprovalsModule mode="admin" /> },
             { path: "documents", element: <DocumentsModule /> },
             { path: "allocation", element: <AllocationModule /> },
             { path: "allocation/create", element: <AllocationAddPage /> },
@@ -147,7 +146,7 @@ const router = createBrowserRouter([
             { path: "surveys/report/:id", element: <SurveyReportPage /> },
             { path: "releases", element: <ReleasesModule /> },
             { path: "releases/:id/edit", element: <SurveyBuilderPage /> },
-            { path: "approvals", element: <ApprovalsModule /> },
+            { path: "approvals", element: <ApprovalsModule mode="approver" /> },
             { path: "allocation", element: <AllocationModule /> },
             { path: "allocation/create", element: <AllocationAddPage /> },
             { path: "calendar", element: <CalendarModule /> },

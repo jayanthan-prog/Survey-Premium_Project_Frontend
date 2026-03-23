@@ -17,7 +17,9 @@ const CalendarSidebar = ({
 }) => {
     return (
         <div className="border-r border-slate-200 bg-white p-4 overflow-y-auto">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">August 2023</h3>
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">
+                {selectedDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </h3>
 
             {/* Mini Calendar Navigation */}
             <div className="flex items-center justify-between mb-6">
@@ -52,12 +54,12 @@ const CalendarSidebar = ({
                                 key={day.toISOString()}
                                 onClick={() => setSelectedDate(day)}
                                 className={`p-2 text-sm rounded-lg transition ${isSelected
-                                        ? "bg-purple-600 text-white font-semibold"
-                                        : isToday
-                                            ? "border-2 border-purple-400 text-slate-900"
-                                            : isCurrentMonth
-                                                ? "text-slate-900 hover:bg-slate-100"
-                                                : "text-slate-300"
+                                    ? "bg-purple-600 text-white font-semibold"
+                                    : isToday
+                                        ? "border-2 border-purple-400 text-slate-900"
+                                        : isCurrentMonth
+                                            ? "text-slate-900 hover:bg-slate-100"
+                                            : "text-slate-300"
                                     }`}
                             >
                                 {day.getDate()}
@@ -71,9 +73,6 @@ const CalendarSidebar = ({
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold text-slate-900">Scheduled</h4>
-                    <button className="text-purple-600 hover:text-purple-700">
-                        <span className="text-2xl">+</span>
-                    </button>
                 </div>
 
                 <div className="space-y-2">
@@ -92,27 +91,6 @@ const CalendarSidebar = ({
                             </div>
                         ))
                     )}
-                </div>
-            </div>
-
-            {/* My Calendars */}
-            <div className="mt-8 space-y-3">
-                <h4 className="text-sm font-semibold text-slate-900">My Calendars</h4>
-                <div className="space-y-2">
-                    {[
-                        { name: "Bootcamp", color: "emerald" },
-                        { name: "Birthday", color: "pink" },
-                        { name: "Reminders", color: "slate" },
-                    ].map((cal) => (
-                        <label key={cal.name} className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                defaultChecked
-                                className="rounded w-4 h-4"
-                            />
-                            <span className="text-sm text-slate-700">{cal.name}</span>
-                        </label>
-                    ))}
                 </div>
             </div>
         </div>
