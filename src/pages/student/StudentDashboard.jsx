@@ -9,25 +9,34 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { getDashboardSummary } from "../../services/dashboardService";
+import { getSurveyParticipants, getSurveys } from "../../services/surveyApi";
 
-const todayTasks = [
-    { task: "Submit Hostel Survey", due: "Today" },
-    { task: "Attend Group Meeting", due: "5:00 PM" },
-];
+function formatShortDate(value) {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 
-const upcomingActivities = [
-    { activity: "Elective Course Survey", date: "Feb 28" },
-    { activity: "Internship Willingness", date: "Mar 3" },
-];
+function resolveTaskDueText(status, closesAt) {
+    const normalizedStatus = String(status || "").toUpperCase();
+    if (normalizedStatus === "STARTED") return "In progress";
+    if (!closesAt) return "Open";
 
-const groups = [
-    { name: "Block A Residents" },
-    { name: "Machine Learning Elective" },
-];
+    const closeDate = new Date(closesAt);
+    if (Number.isNaN(closeDate.getTime())) return "Open";
+
+    const now = new Date();
+    const isToday = closeDate.toDateString() === now.toDateString();
+    if (isToday) return "Due today";
+    return `Due ${formatShortDate(closesAt)}`;
+}
 
 export const StudentDashboard = () => {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const [dashboard, setDashboard] = useState(null);
+    const [todayTasks, setTodayTasks] = useState([]);
+    const [upcomingActivities, setUpcomingActivities] = useState([]);
+    const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -44,9 +53,53 @@ export const StudentDashboard = () => {
             }
 
             try {
-                const response = await getDashboardSummary(token);
+                const [dashboardResponse, surveysResponse, participantsResponse] = await Promise.all([
+                    getDashboardSummary(token),
+                    getSurveys(),
+                    getSurveyParticipants(),
+                ]);
                 if (!active) return;
-                setDashboard(response);
+
+                setDashboard(dashboardResponse || null);
+
+                const surveyList = Array.isArray(surveysResponse) ? surveysResponse : [];
+                const participantList = Array.isArray(participantsResponse) ? participantsResponse : [];
+                const groupList = Array.isArray(dashboardResponse?.my_groups) ? dashboardResponse.my_groups : [];
+                const recentReleases = Array.isArray(dashboardResponse?.recent_releases) ? dashboardResponse.recent_releases : [];
+
+                const surveyTitleById = new Map(
+                    surveyList.map((survey) => [String(survey?.survey_id), survey?.title || survey?.name || "Untitled Survey"])
+                );
+
+                const myTasks = participantList
+                    .filter((item) => String(item?.user_id) === String(user?.user_id))
+                    .filter((item) => {
+                        const status = String(item?.status || "").toUpperCase();
+                        return status === "INVITED" || status === "STARTED";
+                    })
+                    .slice(0, 5)
+                    .map((item) => {
+                        const surveyId = String(item?.survey_id || "");
+                        return {
+                            task: surveyTitleById.get(surveyId) || `Survey ${surveyId}`,
+                            due: resolveTaskDueText(item?.status),
+                        };
+                    });
+
+                const upcoming = recentReleases
+                    .slice(0, 5)
+                    .map((release) => ({
+                        activity: release?.name || "Survey Release",
+                        date: formatShortDate(release?.opens_at || release?.closes_at),
+                    }));
+
+                const myGroups = groupList
+                    .slice(0, 6)
+                    .map((group) => ({ name: group?.name || "Untitled Group" }));
+
+                setTodayTasks(myTasks);
+                setUpcomingActivities(upcoming);
+                setGroups(myGroups);
             } catch (err) {
                 if (!active) return;
                 setError(err?.message || "Failed to load dashboard data.");
@@ -59,7 +112,7 @@ export const StudentDashboard = () => {
         return () => {
             active = false;
         };
-    }, [token]);
+    }, [token, user?.user_id]);
 
     const overview = dashboard?.overview || {};
 
@@ -106,6 +159,9 @@ export const StudentDashboard = () => {
                                 <span className="text-xs text-gray-400">{t.due}</span>
                             </li>
                         ))}
+                        {!loading && todayTasks.length === 0 && (
+                            <li className="text-sm text-gray-500">No pending tasks right now.</li>
+                        )}
                     </ul>
                 </div>
                 {/* Upcoming Activities */}
@@ -120,6 +176,9 @@ export const StudentDashboard = () => {
                                 <span className="text-xs text-gray-400">{a.date}</span>
                             </li>
                         ))}
+                        {!loading && upcomingActivities.length === 0 && (
+                            <li className="text-sm text-gray-500">No upcoming activities.</li>
+                        )}
                     </ul>
                 </div>
                 {/* Groups */}
@@ -133,6 +192,9 @@ export const StudentDashboard = () => {
                                 {g.name}
                             </li>
                         ))}
+                        {!loading && groups.length === 0 && (
+                            <li className="text-sm text-gray-500">You are not in any groups yet.</li>
+                        )}
                     </ul>
                 </div>
             </div>

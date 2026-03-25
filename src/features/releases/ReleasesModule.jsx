@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useConfirmation } from "../../context/ConfirmationContext";
 import {
     archiveSurvey,
     deleteRelease,
@@ -12,6 +13,7 @@ import {
 const ReleasesModule = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { confirm } = useConfirmation();
 
     const basePath = user?.role === "APPROVER" ? "/approver" : "/admin";
     const [loading, setLoading] = useState(true);
@@ -272,6 +274,14 @@ const ReleasesModule = () => {
                                     <button
                                         disabled={actionLoading || selectedRelease.is_frozen}
                                         onClick={async () => {
+                                            const approved = await confirm({
+                                                title: "Freeze Release",
+                                                message: "Are you sure you want to freeze this release?",
+                                                confirmText: "Freeze",
+                                                tone: "warning",
+                                            });
+                                            if (!approved) return;
+
                                             try {
                                                 setActionLoading(true);
                                                 setError("");
@@ -290,6 +300,14 @@ const ReleasesModule = () => {
                                     <button
                                         disabled={actionLoading || !selectedRelease.is_frozen}
                                         onClick={async () => {
+                                            const approved = await confirm({
+                                                title: "Resume Release",
+                                                message: "Are you sure you want to resume this release?",
+                                                confirmText: "Resume",
+                                                tone: "warning",
+                                            });
+                                            if (!approved) return;
+
                                             try {
                                                 setActionLoading(true);
                                                 setError("");
@@ -308,6 +326,14 @@ const ReleasesModule = () => {
                                     <button
                                         disabled={actionLoading}
                                         onClick={async () => {
+                                            const approved = await confirm({
+                                                title: "Stop Release",
+                                                message: "Are you sure you want to stop this release now?",
+                                                confirmText: "Stop",
+                                                tone: "warning",
+                                            });
+                                            if (!approved) return;
+
                                             try {
                                                 setActionLoading(true);
                                                 setError("");
@@ -329,8 +355,13 @@ const ReleasesModule = () => {
                                     <button
                                         disabled={actionLoading}
                                         onClick={async () => {
-                                            const confirmed = window.confirm("Archive the linked survey for this release?");
-                                            if (!confirmed) return;
+                                            const approved = await confirm({
+                                                title: "Archive Survey",
+                                                message: "Archive the linked survey for this release?",
+                                                confirmText: "Archive",
+                                                tone: "warning",
+                                            });
+                                            if (!approved) return;
                                             try {
                                                 setActionLoading(true);
                                                 setError("");
@@ -350,8 +381,13 @@ const ReleasesModule = () => {
                                 <button
                                     disabled={actionLoading}
                                     onClick={async () => {
-                                        const confirmed = window.confirm(`Delete release ${selectedRelease.name}?`);
-                                        if (!confirmed) return;
+                                        const approved = await confirm({
+                                            title: "Delete Release",
+                                            message: `Delete release ${selectedRelease.name}? This action cannot be undone.`,
+                                            confirmText: "Delete",
+                                            tone: "danger",
+                                        });
+                                        if (!approved) return;
                                         try {
                                             setActionLoading(true);
                                             setError("");

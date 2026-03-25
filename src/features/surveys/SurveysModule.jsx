@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useConfirmation } from "../../context/ConfirmationContext";
 import {
     archiveSurvey, createRelease, deleteRelease, deleteSurvey,
     generateSurveyOtp, getReleasesForSurvey, getSurveys, publishSurvey, unpublishSurvey, updateRelease
@@ -9,6 +10,7 @@ import {
 const SurveysModule = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { confirm } = useConfirmation();
     const [surveys, setSurveys] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -136,6 +138,14 @@ const SurveysModule = () => {
     const handlePublish = async () => {
         if (!selectedSurvey) return;
 
+        const approved = await confirm({
+            title: "Publish Survey",
+            message: `Publish ${selectedSurvey.title} now?`,
+            confirmText: "Publish",
+            tone: "info",
+        });
+        if (!approved) return;
+
         await runAction(async () => {
             await publishSurvey(selectedSurvey.survey_id, {
                 release_name: `${selectedSurvey.title} Release`,
@@ -147,6 +157,15 @@ const SurveysModule = () => {
 
     const handleUnpublish = async () => {
         if (!selectedSurvey) return;
+
+        const approved = await confirm({
+            title: "Unpublish Survey",
+            message: `Unpublish ${selectedSurvey.title}?`,
+            confirmText: "Unpublish",
+            tone: "warning",
+        });
+        if (!approved) return;
+
         await runAction(async () => {
             await unpublishSurvey(selectedSurvey.survey_id);
         });
@@ -154,6 +173,15 @@ const SurveysModule = () => {
 
     const handleArchive = async () => {
         if (!selectedSurvey) return;
+
+        const approved = await confirm({
+            title: "Archive Survey",
+            message: `Archive ${selectedSurvey.title}?`,
+            confirmText: "Archive",
+            tone: "warning",
+        });
+        if (!approved) return;
+
         await runAction(async () => {
             await archiveSurvey(selectedSurvey.survey_id);
         });
@@ -161,8 +189,14 @@ const SurveysModule = () => {
 
     const handleDelete = async () => {
         if (!selectedSurvey) return;
-        const confirmed = window.confirm(`Delete survey \"${selectedSurvey.title}\"?`);
-        if (!confirmed) return;
+
+        const approved = await confirm({
+            title: "Delete Survey",
+            message: `Are you sure you want to delete ${selectedSurvey.title}? This action cannot be undone.`,
+            confirmText: "Delete",
+            tone: "danger",
+        });
+        if (!approved) return;
 
         await runAction(async () => {
             await deleteSurvey(selectedSurvey.survey_id);
@@ -189,6 +223,17 @@ const SurveysModule = () => {
 
     const handleFreezeRelease = async (releaseId, freeze) => {
         if (!selectedSurvey) return;
+
+        const approved = await confirm({
+            title: freeze ? "Freeze Release" : "Resume Release",
+            message: freeze
+                ? "Are you sure you want to freeze this release?"
+                : "Are you sure you want to resume this release?",
+            confirmText: freeze ? "Freeze" : "Resume",
+            tone: "warning",
+        });
+        if (!approved) return;
+
         try {
             setReleaseActionLoading(true);
             await updateRelease(selectedSurvey.survey_id, releaseId, { is_frozen: freeze });
@@ -201,7 +246,14 @@ const SurveysModule = () => {
     };
 
     const handleDeleteRelease = async (releaseId, releaseName) => {
-        if (!window.confirm(`Delete release "${releaseName}"? This will also remove all participation records for this release.`)) return;
+        const approved = await confirm({
+            title: "Delete Release",
+            message: `Delete release ${releaseName}? This will also remove all participation records for this release.`,
+            confirmText: "Delete",
+            tone: "danger",
+        });
+        if (!approved) return;
+
         try {
             setReleaseActionLoading(true);
             await deleteRelease(selectedSurvey.survey_id, releaseId);

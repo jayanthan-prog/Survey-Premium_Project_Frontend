@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { FileUp, Paperclip, Star, X } from "lucide-react";
-import { getSurveyById, submitSurvey } from "../../services/surveyApi";
+import { useAuth } from "../../context/AuthContext";
+import { getSurveyById, getSurveyParticipants, submitSurvey } from "../../services/surveyApi";
 
 const normalizeQuestionType = (value) => String(value || "").trim().toLowerCase().replace(/[-\s]+/g, "_");
 
@@ -113,6 +114,7 @@ const normalizePages = (pages, questions) => {
 export default function TakeSurveyPage() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [survey, setSurvey] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -121,6 +123,7 @@ export default function TakeSurveyPage() {
     const [submitted, setSubmitted] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
+    const [alreadyCompleted, setAlreadyCompleted] = useState(false);
 
     const fieldClass = "w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition";
     const subtleFieldClass = "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-slate-800 shadow-sm outline-none transition-all duration-200 focus:border-transparent focus:ring-2 focus:ring-purple-500 focus:bg-white";
@@ -145,9 +148,21 @@ export default function TakeSurveyPage() {
             }
 
             try {
-                const response = await getSurveyById(id);
+                const [response, participantsResponse] = await Promise.all([
+                    getSurveyById(id),
+                    getSurveyParticipants(),
+                ]);
                 if (!active) return;
+
+                const participants = Array.isArray(participantsResponse) ? participantsResponse : [];
+                const completed = participants.some((entry) => (
+                    Number(entry?.survey_id) === Number(id)
+                    && Number(entry?.user_id) === Number(user?.user_id)
+                    && String(entry?.status || "").toUpperCase() === "COMPLETED"
+                ));
+
                 setSurvey(response);
+                setAlreadyCompleted(completed);
             } catch (err) {
                 if (!active) return;
                 setError(err?.message || "Failed to load survey.");
@@ -160,7 +175,7 @@ export default function TakeSurveyPage() {
         return () => {
             active = false;
         };
-    }, [id]);
+    }, [id, user?.user_id]);
 
     const handleChange = (qid, value) => {
         setAnswers((prev) => ({ ...prev, [String(qid)]: value }));
@@ -463,9 +478,14 @@ export default function TakeSurveyPage() {
 
             await submitSurvey(id, { answers: filteredAnswers, otp: config.otpRequired ? otp : undefined });
             setSubmitted(true);
+            setAlreadyCompleted(true);
             setTimeout(() => navigate("/student/surveys"), 1200);
         } catch (err) {
-            setError(err?.message || "Failed to submit survey.");
+            const message = err?.message || "Failed to submit survey.";
+            setError(message);
+            if (String(message).toLowerCase().includes("already") || err?.status === 409) {
+                setAlreadyCompleted(true);
+            }
         } finally {
             setSubmitting(false);
         }
@@ -484,6 +504,22 @@ export default function TakeSurveyPage() {
                     type="button"
                     onClick={() => navigate("/student/surveys")}
                     className="mt-4 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
+                >
+                    Back to Surveys
+                </button>
+            </div>
+        );
+    }
+
+    if (alreadyCompleted) {
+        return (
+            <div className="mx-auto mt-8 max-w-3xl rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 shadow-sm">
+                <h1 className="text-xl font-semibold text-emerald-900">Survey Completed</h1>
+                <div className="mt-2 text-sm text-emerald-700">You have completed this survey already.</div>
+                <button
+                    type="button"
+                    onClick={() => navigate("/student/surveys")}
+                    className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
                 >
                     Back to Surveys
                 </button>

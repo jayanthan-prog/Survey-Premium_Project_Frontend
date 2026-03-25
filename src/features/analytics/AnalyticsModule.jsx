@@ -1,67 +1,29 @@
+import { useEffect, useMemo, useState } from "react";
 import { ChartBarIcon, ClipboardDocumentCheckIcon, UserGroupIcon } from "@heroicons/react/24/outline";
+import { getDashboardSummary } from "../../services/dashboardService";
+import { getSurveys, getSurveyParticipants } from "../../services/surveyApi";
+import { getActionPlans } from "../../services/actionPlanApi";
+import { useAuth } from "../../context/AuthContext";
 
-const monthlySurveyStats = [
-    {
-        month: "Jan",
-        students: { assigned: 520, completed: 446, halfway: 48, dropped: 26 },
-        teachers: { assigned: 68, completed: 58, halfway: 6, dropped: 4 },
-    },
-    {
-        month: "Feb",
-        students: { assigned: 560, completed: 472, halfway: 56, dropped: 32 },
-        teachers: { assigned: 74, completed: 62, halfway: 8, dropped: 4 },
-    },
-    {
-        month: "Mar",
-        students: { assigned: 590, completed: 505, halfway: 50, dropped: 35 },
-        teachers: { assigned: 80, completed: 69, halfway: 7, dropped: 4 },
-    },
-    {
-        month: "Apr",
-        students: { assigned: 610, completed: 534, halfway: 44, dropped: 32 },
-        teachers: { assigned: 84, completed: 73, halfway: 7, dropped: 4 },
-    },
-    {
-        month: "May",
-        students: { assigned: 635, completed: 548, halfway: 52, dropped: 35 },
-        teachers: { assigned: 90, completed: 77, halfway: 8, dropped: 5 },
-    },
-    {
-        month: "Jun",
-        students: { assigned: 660, completed: 572, halfway: 50, dropped: 38 },
-        teachers: { assigned: 96, completed: 82, halfway: 9, dropped: 5 },
-    },
-];
+const buildLastMonths = (count = 6) => {
+    const labels = [];
+    const now = new Date();
+    for (let i = count - 1; i >= 0; i -= 1) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        labels.push({
+            key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+            label: d.toLocaleDateString("en-US", { month: "short" }),
+        });
+    }
+    return labels;
+};
 
-const actionPlanMonthlyStats = [
-    { month: "Jan", created: 16, active: 9, completed: 7, overdue: 2 },
-    { month: "Feb", created: 18, active: 11, completed: 9, overdue: 3 },
-    { month: "Mar", created: 20, active: 12, completed: 10, overdue: 3 },
-    { month: "Apr", created: 23, active: 13, completed: 12, overdue: 2 },
-    { month: "May", created: 22, active: 12, completed: 14, overdue: 2 },
-    { month: "Jun", created: 24, active: 14, completed: 15, overdue: 1 },
-];
-
-const surveyHighlights = [
-    { survey: "Hostel Preference 2026", totalParticipants: 812, completionRate: 96 },
-    { survey: "Internship Willingness", totalParticipants: 560, completionRate: 88 },
-    { survey: "Elective Course Bidding", totalParticipants: 904, completionRate: 91 },
-    { survey: "Transport Facilities Feedback", totalParticipants: 430, completionRate: 84 },
-];
-
-const monthlyTotals = (roleKey) =>
-    monthlySurveyStats.reduce(
-        (acc, row) => {
-            const point = row[roleKey];
-            return {
-                assigned: acc.assigned + point.assigned,
-                completed: acc.completed + point.completed,
-                halfway: acc.halfway + point.halfway,
-                dropped: acc.dropped + point.dropped,
-            };
-        },
-        { assigned: 0, completed: 0, halfway: 0, dropped: 0 }
-    );
+const monthKeyFromDate = (value) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+};
 
 const toSmoothPath = (points) => {
     if (!points.length) return "";
@@ -86,7 +48,7 @@ const toSmoothPath = (points) => {
     return path;
 };
 
-const MultiLineAreaChart = ({ title, subtitle, categories, series }) => {
+const MultiLineAreaChart = ({ title, categories, series }) => {
     const width = 700;
     const height = 300;
     const paddingX = 44;
@@ -95,12 +57,12 @@ const MultiLineAreaChart = ({ title, subtitle, categories, series }) => {
     const plotHeight = height - paddingY * 2;
 
     const allValues = series.flatMap((item) => item.data);
-    const maxValue = Math.max(...allValues);
+    const maxValue = Math.max(1, ...allValues);
     const chartIdBase = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
     const buildPoints = (values) =>
         values.map((value, index) => ({
-            x: paddingX + (index * plotWidth) / (values.length - 1),
+            x: paddingX + (index * plotWidth) / Math.max(1, values.length - 1),
             y: height - paddingY - (value / maxValue) * plotHeight,
             value,
         }));
@@ -164,74 +126,189 @@ const MultiLineAreaChart = ({ title, subtitle, categories, series }) => {
 };
 
 const AnalyticsModule = () => {
-    const studentTotals = monthlyTotals("students");
-    const teacherTotals = monthlyTotals("teachers");
+    const { token } = useAuth();
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
-    const avgSurveyCompletion = Math.round(
-        surveyHighlights.reduce((acc, item) => acc + item.completionRate, 0) / surveyHighlights.length
-    );
+    const [dashboard, setDashboard] = useState(null);
+    const [surveys, setSurveys] = useState([]);
+    const [participants, setParticipants] = useState([]);
+    const [plans, setPlans] = useState([]);
 
-    const months = monthlySurveyStats.map((item) => item.month);
+    useEffect(() => {
+        let active = true;
 
-    const studentSeries = [
+        const load = async () => {
+            try {
+                setLoading(true);
+                setError("");
+
+                const [dashboardRes, surveysRes, participantsRes, plansRes] = await Promise.allSettled([
+                    getDashboardSummary(token),
+                    getSurveys(),
+                    getSurveyParticipants(),
+                    getActionPlans(),
+                ]);
+
+                if (!active) return;
+
+                if (dashboardRes.status === "fulfilled") setDashboard(dashboardRes.value || null);
+                if (surveysRes.status === "fulfilled") setSurveys(Array.isArray(surveysRes.value) ? surveysRes.value : []);
+                if (participantsRes.status === "fulfilled") setParticipants(Array.isArray(participantsRes.value) ? participantsRes.value : []);
+                if (plansRes.status === "fulfilled") setPlans(Array.isArray(plansRes.value) ? plansRes.value : []);
+
+                const failures = [dashboardRes, surveysRes, participantsRes, plansRes].filter((item) => item.status === "rejected");
+                if (failures.length) {
+                    setError("Some analytics sources failed to load. Showing available data.");
+                }
+            } catch (err) {
+                if (!active) return;
+                setError(err?.message || "Failed to load analytics.");
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
+
+        load();
+
+        return () => {
+            active = false;
+        };
+    }, [token]);
+
+    const monthMeta = useMemo(() => buildLastMonths(6), []);
+
+    const surveyTrend = useMemo(() => {
+        const seed = Object.fromEntries(monthMeta.map((m) => [m.key, { assigned: 0, completed: 0, dropped: 0 }]));
+
+        for (const participant of participants) {
+            const assignedKey = monthKeyFromDate(participant.invited_at || participant.created_at);
+            if (assignedKey && seed[assignedKey]) {
+                seed[assignedKey].assigned += 1;
+            }
+
+            const status = String(participant.status || "").toUpperCase();
+            if (status === "COMPLETED") {
+                const completedKey = monthKeyFromDate(participant.completed_at || participant.updated_at || participant.created_at);
+                if (completedKey && seed[completedKey]) {
+                    seed[completedKey].completed += 1;
+                }
+            }
+            if (status === "DROPPED") {
+                const droppedKey = monthKeyFromDate(participant.updated_at || participant.created_at);
+                if (droppedKey && seed[droppedKey]) {
+                    seed[droppedKey].dropped += 1;
+                }
+            }
+        }
+
+        return monthMeta.map((m) => ({ month: m.label, ...seed[m.key] }));
+    }, [participants, monthMeta]);
+
+    const actionPlanTrend = useMemo(() => {
+        const seed = Object.fromEntries(monthMeta.map((m) => [m.key, { created: 0, active: 0, completed: 0 }]));
+
+        for (const plan of plans) {
+            const monthKey = monthKeyFromDate(plan.created_at);
+            if (!monthKey || !seed[monthKey]) continue;
+
+            seed[monthKey].created += 1;
+            const status = String(plan.status || "").toUpperCase();
+            if (["PENDING", "OPEN", "IN_PROGRESS"].includes(status)) seed[monthKey].active += 1;
+            if (status === "COMPLETED") seed[monthKey].completed += 1;
+        }
+
+        return monthMeta.map((m) => ({ month: m.label, ...seed[m.key] }));
+    }, [plans, monthMeta]);
+
+    const surveyHighlights = useMemo(() => {
+        const participantsBySurvey = new Map();
+
+        for (const participant of participants) {
+            const key = String(participant.survey_id || "");
+            if (!key) continue;
+            const existing = participantsBySurvey.get(key) || { total: 0, completed: 0 };
+            existing.total += 1;
+            if (String(participant.status || "").toUpperCase() === "COMPLETED") {
+                existing.completed += 1;
+            }
+            participantsBySurvey.set(key, existing);
+        }
+
+        const rows = surveys.map((survey) => {
+            const stat = participantsBySurvey.get(String(survey.survey_id)) || { total: 0, completed: 0 };
+            const completionRate = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : 0;
+            return {
+                survey: survey.title || `Survey ${survey.survey_id}`,
+                totalParticipants: stat.total,
+                completionRate,
+            };
+        });
+
+        rows.sort((a, b) => b.totalParticipants - a.totalParticipants);
+        return rows.slice(0, 6);
+    }, [surveys, participants]);
+
+    const totalParticipants = participants.length;
+    const completedParticipants = participants.filter((p) => String(p.status || "").toUpperCase() === "COMPLETED").length;
+    const completionRate = totalParticipants ? Math.round((completedParticipants / totalParticipants) * 100) : 0;
+
+    const cards = [
         {
-            key: "assigned",
-            label: "Assigned",
-            stroke: "#2563eb",
-            fill: "#3b82f6",
-            data: monthlySurveyStats.map((item) => item.students.assigned),
+            label: "Total Users",
+            value: Number(dashboard?.overview?.users || 0),
+            icon: UserGroupIcon,
+            tone: "text-blue-600",
+            bg: "bg-blue-50",
+            sub: "Registered on platform",
         },
         {
-            key: "completed",
-            label: "Completed",
-            stroke: "#10b981",
-            fill: "#34d399",
-            data: monthlySurveyStats.map((item) => item.students.completed),
+            label: "Total Surveys",
+            value: Number(dashboard?.overview?.surveys || surveys.length),
+            icon: ClipboardDocumentCheckIcon,
+            tone: "text-purple-600",
+            bg: "bg-purple-50",
+            sub: `${Number(dashboard?.overview?.active_releases || 0)} active releases`,
         },
         {
-            key: "halfway",
-            label: "Halfway",
-            stroke: "#f59e0b",
-            fill: "#fbbf24",
-            data: monthlySurveyStats.map((item) => item.students.halfway),
+            label: "Pending Approvals",
+            value: Number(dashboard?.overview?.pending_approvals || 0),
+            icon: ChartBarIcon,
+            tone: "text-amber-600",
+            bg: "bg-amber-50",
+            sub: "Awaiting decision",
         },
         {
-            key: "dropped",
-            label: "Dropped",
-            stroke: "#ef4444",
-            fill: "#f87171",
-            data: monthlySurveyStats.map((item) => item.students.dropped),
+            label: "Participation Completion",
+            value: `${completionRate}%`,
+            icon: ChartBarIcon,
+            tone: "text-emerald-600",
+            bg: "bg-emerald-50",
+            sub: `${completedParticipants}/${totalParticipants} participants completed`,
         },
     ];
 
-    const teacherSeries = [
+    const surveySeries = [
         {
             key: "assigned",
             label: "Assigned",
             stroke: "#2563eb",
             fill: "#3b82f6",
-            data: monthlySurveyStats.map((item) => item.teachers.assigned),
+            data: surveyTrend.map((item) => item.assigned),
         },
         {
             key: "completed",
             label: "Completed",
             stroke: "#10b981",
             fill: "#34d399",
-            data: monthlySurveyStats.map((item) => item.teachers.completed),
-        },
-        {
-            key: "halfway",
-            label: "Halfway",
-            stroke: "#f59e0b",
-            fill: "#fbbf24",
-            data: monthlySurveyStats.map((item) => item.teachers.halfway),
+            data: surveyTrend.map((item) => item.completed),
         },
         {
             key: "dropped",
             label: "Dropped",
             stroke: "#ef4444",
             fill: "#f87171",
-            data: monthlySurveyStats.map((item) => item.teachers.dropped),
+            data: surveyTrend.map((item) => item.dropped),
         },
     ];
 
@@ -241,71 +318,34 @@ const AnalyticsModule = () => {
             label: "Created",
             stroke: "#8b5cf6",
             fill: "#a78bfa",
-            data: actionPlanMonthlyStats.map((item) => item.created),
+            data: actionPlanTrend.map((item) => item.created),
         },
         {
             key: "active",
             label: "Active",
             stroke: "#06b6d4",
             fill: "#22d3ee",
-            data: actionPlanMonthlyStats.map((item) => item.active),
+            data: actionPlanTrend.map((item) => item.active),
         },
         {
             key: "completed",
             label: "Completed",
             stroke: "#22c55e",
             fill: "#4ade80",
-            data: actionPlanMonthlyStats.map((item) => item.completed),
-        },
-        {
-            key: "overdue",
-            label: "Overdue",
-            stroke: "#f43f5e",
-            fill: "#fb7185",
-            data: actionPlanMonthlyStats.map((item) => item.overdue),
+            data: actionPlanTrend.map((item) => item.completed),
         },
     ];
 
-    const cards = [
-        {
-            label: "Student Assigned",
-            value: studentTotals.assigned,
-            icon: UserGroupIcon,
-            tone: "text-blue-600",
-            bg: "bg-blue-50",
-            sub: `${studentTotals.completed} completed`,
-        },
-        {
-            label: "Teacher Assigned",
-            value: teacherTotals.assigned,
-            icon: ClipboardDocumentCheckIcon,
-            tone: "text-purple-600",
-            bg: "bg-purple-50",
-            sub: `${teacherTotals.completed} completed`,
-        },
-        {
-            label: "Student Drop-offs",
-            value: studentTotals.dropped,
-            icon: ChartBarIcon,
-            tone: "text-rose-600",
-            bg: "bg-rose-50",
-            sub: `${studentTotals.halfway} stopped halfway`,
-        },
-        {
-            label: "Avg Survey Completion",
-            value: `${avgSurveyCompletion}%`,
-            icon: ChartBarIcon,
-            tone: "text-emerald-600",
-            bg: "bg-emerald-50",
-            sub: "Across recent completed surveys",
-        },
-    ];
+    const months = monthMeta.map((item) => item.label);
 
     return (
         <div className="space-y-6">
-            <div>
+            <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-semibold text-gray-900">Analytics</h1>
+                {loading && <span className="text-xs text-gray-500">Loading...</span>}
             </div>
+
+            {error && <div className="text-sm text-amber-600">{error}</div>}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {cards.map((card) => (
@@ -324,22 +364,16 @@ const AnalyticsModule = () => {
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <MultiLineAreaChart
-                    title="Student Monthly Survey Stats"
+                    title="Survey Participation Trend"
                     categories={months}
-                    series={studentSeries}
+                    series={surveySeries}
                 />
                 <MultiLineAreaChart
-                    title="Teacher Monthly Survey Stats"
+                    title="Action Plan Trend"
                     categories={months}
-                    series={teacherSeries}
+                    series={actionPlanSeries}
                 />
             </div>
-
-            <MultiLineAreaChart
-                title="Action Plan Monthly Trend"
-                categories={actionPlanMonthlyStats.map((item) => item.month)}
-                series={actionPlanSeries}
-            />
 
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-5 py-4 border-b border-gray-100">
@@ -357,6 +391,9 @@ const AnalyticsModule = () => {
                             </div>
                         </div>
                     ))}
+                    {!surveyHighlights.length && (
+                        <div className="px-5 py-4 text-sm text-gray-500">No analytics data available yet.</div>
+                    )}
                 </div>
             </div>
         </div>

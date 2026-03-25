@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { updateCurrentUser } from "../../services/authservice";
+import { updateCurrentUser, updateUserPassword, updateUserPreferences } from "../../services/authservice";
 
 const SettingsModule = () => {
     const { user, token, updateSessionUser } = useAuth();
@@ -13,6 +13,14 @@ const SettingsModule = () => {
     });
     const [editProfile, setEditProfile] = useState(false);
     const [profileMessage, setProfileMessage] = useState("");
+    const [preferencesMessage, setPreferencesMessage] = useState("");
+    const [securityMessage, setSecurityMessage] = useState("");
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [savingPreferences, setSavingPreferences] = useState(false);
+    const [savingSecurity, setSavingSecurity] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
     // Sync theme state with global documentElement class
     const getInitialTheme = () => {
         return document.documentElement.classList.contains("dark") ? "dark" : "light";
@@ -45,6 +53,16 @@ const SettingsModule = () => {
             department: user.department || "",
             role: user.role || "",
         });
+
+        const settings = user.settings || {};
+        if (settings.theme) setTheme(settings.theme);
+        if (settings.language) setLanguage(settings.language);
+        if (settings.timezone) setTimezone(settings.timezone);
+        if (Object.prototype.hasOwnProperty.call(settings, "emailAlerts")) setEmailAlerts(Boolean(settings.emailAlerts));
+        if (Object.prototype.hasOwnProperty.call(settings, "pushAlerts")) setPushAlerts(Boolean(settings.pushAlerts));
+        if (Object.prototype.hasOwnProperty.call(settings, "weeklyDigest")) setWeeklyDigest(Boolean(settings.weeklyDigest));
+        if (Object.prototype.hasOwnProperty.call(settings, "profileVisible")) setProfileVisible(Boolean(settings.profileVisible));
+        if (Object.prototype.hasOwnProperty.call(settings, "twoFactorEnabled")) setTwoFactorEnabled(Boolean(settings.twoFactorEnabled));
     }, [user]);
 
     const handleProfileChange = (field) => (event) => {
@@ -52,13 +70,15 @@ const SettingsModule = () => {
     };
 
     const handleProfileSave = async (event) => {
-        event.preventDefault();
+        if (event?.preventDefault) event.preventDefault();
+        if (!editProfile) return;
         if (!token) {
             setProfileMessage("Session expired. Please login again.");
             return;
         }
 
         try {
+            setSavingProfile(true);
             const response = await updateCurrentUser(token, {
                 name: profile.name,
                 email: profile.email,
@@ -70,12 +90,69 @@ const SettingsModule = () => {
             setProfileMessage("Profile updated successfully.");
         } catch (err) {
             setProfileMessage(err?.message || "Failed to update profile.");
+        } finally {
+            setSavingProfile(false);
         }
     };
 
-    const handleSecuritySave = (event) => {
+    const handleSecuritySave = async (event) => {
         event.preventDefault();
-        console.log("Update security settings");
+
+        if (!token) {
+            setSecurityMessage("Session expired. Please login again.");
+            return;
+        }
+
+        if (!newPassword || !confirmPassword) {
+            setSecurityMessage("Please enter and confirm your new password.");
+            return;
+        }
+
+        try {
+            setSavingSecurity(true);
+            setSecurityMessage("");
+            await updateUserPassword(token, {
+                current_password: currentPassword,
+                new_password: newPassword,
+                confirm_password: confirmPassword,
+            });
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+            setSecurityMessage("Password updated successfully.");
+        } catch (err) {
+            setSecurityMessage(err?.message || "Failed to update password.");
+        } finally {
+            setSavingSecurity(false);
+        }
+    };
+
+    const handlePreferencesSave = async () => {
+        if (!token) {
+            setPreferencesMessage("Session expired. Please login again.");
+            return;
+        }
+
+        try {
+            setSavingPreferences(true);
+            setPreferencesMessage("");
+            const response = await updateUserPreferences(token, {
+                theme,
+                language,
+                timezone,
+                emailAlerts,
+                pushAlerts,
+                weeklyDigest,
+                profileVisible,
+                twoFactorEnabled,
+            });
+            updateSessionUser(response.user);
+            setPreferencesMessage("Settings updated successfully.");
+        } catch (err) {
+            setPreferencesMessage(err?.message || "Failed to update settings.");
+        } finally {
+            setSavingPreferences(false);
+        }
     };
 
     const Toggle = ({ enabled, onToggle }) => (
@@ -94,7 +171,12 @@ const SettingsModule = () => {
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <form onSubmit={handleProfileSave} className="xl:col-span-2 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-5">
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                    }}
+                    className="xl:col-span-2 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-5"
+                >
                     <div className="flex items-center justify-between">
                         <div>
                             <div className="text-lg font-semibold text-gray-900">Profile Settings</div>
@@ -110,10 +192,12 @@ const SettingsModule = () => {
                             </button>
                         ) : (
                             <button
-                                type="submit"
+                                type="button"
+                                onClick={handleProfileSave}
+                                disabled={savingProfile}
                                 className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium"
                             >
-                                Save Changes
+                                {savingProfile ? "Saving..." : "Save Changes"}
                             </button>
                         )}
                     </div>
@@ -136,15 +220,7 @@ const SettingsModule = () => {
                         </div>
                         <div>
                             <label className="text-xs font-medium text-gray-500">Role</label>
-                            {!editProfile ? (
-                                <div className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 shadow-sm">{profile.role}</div>
-                            ) : (
-                                <input
-                                    value={profile.role}
-                                    onChange={handleProfileChange("role")}
-                                    className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
-                                />
-                            )}
+                            <div className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 shadow-sm">{profile.role}</div>
                         </div>
                         <div>
                             <label className="text-xs font-medium text-gray-500">Email</label>
@@ -195,7 +271,19 @@ const SettingsModule = () => {
                         <label className="text-xs font-medium text-gray-500">New Password</label>
                         <input
                             type="password"
+                            value={newPassword}
+                            onChange={(event) => setNewPassword(event.target.value)}
                             placeholder="Enter new password"
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-medium text-gray-500">Current Password</label>
+                        <input
+                            type="password"
+                            value={currentPassword}
+                            onChange={(event) => setCurrentPassword(event.target.value)}
+                            placeholder="Enter current password"
                             className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
                         />
                     </div>
@@ -203,10 +291,13 @@ const SettingsModule = () => {
                         <label className="text-xs font-medium text-gray-500">Confirm Password</label>
                         <input
                             type="password"
+                            value={confirmPassword}
+                            onChange={(event) => setConfirmPassword(event.target.value)}
                             placeholder="Confirm new password"
                             className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
                         />
                     </div>
+                    {securityMessage && <div className="text-xs text-purple-600">{securityMessage}</div>}
                     <div className="flex items-center justify-between">
                         <div>
                             <div className="text-sm font-medium text-gray-800">Two-factor authentication</div>
@@ -216,9 +307,10 @@ const SettingsModule = () => {
                     </div>
                     <button
                         type="submit"
+                        disabled={savingSecurity}
                         className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium"
                     >
-                        Update Security
+                        {savingSecurity ? "Updating..." : "Update Security"}
                     </button>
                 </form>
             </div>
@@ -319,6 +411,15 @@ const SettingsModule = () => {
                         </div>
                         <Toggle enabled={profileVisible} onToggle={() => setProfileVisible((prev) => !prev)} />
                     </div>
+                    <button
+                        type="button"
+                        onClick={handlePreferencesSave}
+                        disabled={savingPreferences}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-70"
+                    >
+                        {savingPreferences ? "Saving..." : "Save Preferences"}
+                    </button>
+                    {preferencesMessage && <div className="text-xs text-purple-600">{preferencesMessage}</div>}
                 </div>
             </div>
         </div>

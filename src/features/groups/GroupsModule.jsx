@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, FolderPlus, Lock, LockOpen, Pencil, Search, Trash2, Users } from "lucide-react";
+import { FolderPlus, Lock, LockOpen, Pencil, Search, Trash2, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useConfirmation } from "../../context/ConfirmationContext";
 import { deleteGroup, listGroups, updateGroup } from "../../services/groupService";
 
 const GroupsModule = () => {
     const navigate = useNavigate();
     const { token, user } = useAuth();
+    const { confirm } = useConfirmation();
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [search, setSearch] = useState("");
-    const [pendingDeleteGroup, setPendingDeleteGroup] = useState(null);
     const [freezeToggleId, setFreezeToggleId] = useState(null);
 
     const roleBasePath = user?.role === "APPROVER" ? "/approver" : "/admin";
@@ -51,7 +52,6 @@ const GroupsModule = () => {
     const handleDeleteGroup = async (groupId) => {
         try {
             await deleteGroup(token, groupId);
-            setPendingDeleteGroup(null);
             await loadGroups();
         } catch (err) {
             setError(err?.message || "Failed to delete group.");
@@ -59,6 +59,16 @@ const GroupsModule = () => {
     };
 
     const handleToggleFreezeGroup = async (group) => {
+        const approved = await confirm({
+            title: group.is_active ? "Freeze Group" : "Unfreeze Group",
+            message: group.is_active
+                ? "Are you sure you want to freeze this group?"
+                : "Are you sure you want to unfreeze this group?",
+            confirmText: group.is_active ? "Freeze" : "Unfreeze",
+            tone: "warning",
+        });
+        if (!approved) return;
+
         try {
             setFreezeToggleId(group.group_id);
             setError("");
@@ -152,8 +162,8 @@ const GroupsModule = () => {
                                                     onClick={() => handleToggleFreezeGroup(group)}
                                                     disabled={freezeToggleId === group.group_id}
                                                     className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition ${group.is_active
-                                                            ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                                                            : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                                        ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                                                        : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                                                         } disabled:opacity-60`}
                                                     aria-label={group.is_active ? "Freeze group" : "Unfreeze group"}
                                                     title={group.is_active ? "Freeze group" : "Unfreeze group"}
@@ -168,7 +178,16 @@ const GroupsModule = () => {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setPendingDeleteGroup(group)}
+                                                    onClick={async () => {
+                                                        const approved = await confirm({
+                                                            title: "Delete Group",
+                                                            message: `Are you sure you want to delete ${group.name}? This action cannot be undone.`,
+                                                            confirmText: "Delete",
+                                                            tone: "danger",
+                                                        });
+                                                        if (!approved) return;
+                                                        await handleDeleteGroup(group.group_id);
+                                                    }}
                                                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100"
                                                     aria-label="Delete group"
                                                 >
@@ -189,37 +208,6 @@ const GroupsModule = () => {
                 </div>
             </div>
 
-            {pendingDeleteGroup && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 px-4 backdrop-blur-[2px]">
-                    <div className="w-full max-w-sm rounded-[28px] bg-white p-6 text-center shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-                        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-400">
-                            <AlertCircle size={20} strokeWidth={2.25} />
-                        </div>
-                        <h3 className="text-2xl font-semibold tracking-tight text-slate-900">Delete Group</h3>
-                        <p className="mt-3 text-sm leading-6 text-slate-500">
-                            Are you sure you want to delete <span className="font-medium text-slate-700">{pendingDeleteGroup.name}</span>?
-                            <br />
-                            This action cannot be undone.
-                        </p>
-                        <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setPendingDeleteGroup(null)}
-                                className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-200"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handleDeleteGroup(pendingDeleteGroup.group_id)}
-                                className="rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-600"
-                            >
-                                Confirm
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 };

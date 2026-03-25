@@ -189,12 +189,12 @@ const Topbar = ({ setIsOpen }) => {
                 </button>
 
                 {showNotifications && (
-                    <div className="absolute right-12 top-12 w-80 rounded-xl border border-gray-100 bg-white shadow-2xl z-50 overflow-hidden">
-                        <div className="px-4 py-3 bg-purple-500 text-white">
+                    <div className="absolute right-12 top-12 w-80 rounded-xl border border-gray-100 bg-white shadow-2xl z-50 overflow-hidden flex flex-col max-h-96">
+                        <div className="px-4 py-3 bg-purple-500 text-white flex-shrink-0">
                             <div className="text-sm font-semibold">Notifications</div>
                             <div className="text-xs text-slate-200">Survey updates and reminders</div>
                         </div>
-                        <div className="divide-y divide-gray-100">
+                        <div className="divide-y divide-gray-100 overflow-y-auto flex-1">
                             {isLoadingNotifications && (
                                 <div className="px-4 py-3 text-xs text-gray-500">Loading notifications...</div>
                             )}
@@ -218,7 +218,7 @@ const Topbar = ({ setIsOpen }) => {
                                 </button>
                             ))}
                         </div>
-                        <button onClick={handleMarkAllRead} className="w-full text-xs font-semibold text-purple-600 py-2 hover:bg-purple-50">
+                        <button onClick={handleMarkAllRead} className="w-full text-xs font-semibold text-purple-600 py-2 hover:bg-purple-50 flex-shrink-0">
                             Mark all as read
                         </button>
                     </div>

@@ -12,6 +12,7 @@ import {
     YAxis,
 } from "recharts";
 import { useAuth } from "../../../context/AuthContext";
+import { useConfirmation } from "../../../context/ConfirmationContext";
 import {
     deleteSurveyResponse,
     exportSurveyResponses,
@@ -26,6 +27,7 @@ const SurveyReportPage = () => {
     const navigate = useNavigate();
     const { id } = useParams();
     const { user } = useAuth();
+    const { confirm } = useConfirmation();
 
     const basePath = useMemo(() => (user?.role === "APPROVER" ? "/approver/surveys" : "/admin/surveys"), [user]);
 
@@ -103,8 +105,13 @@ const SurveyReportPage = () => {
     }, [loadResponseDetail]);
 
     const handleDeleteResponse = async (participationId) => {
-        const confirmed = window.confirm("Delete this response?");
-        if (!confirmed) return;
+        const approved = await confirm({
+            title: "Delete Response",
+            message: "Delete this response? This action cannot be undone.",
+            confirmText: "Delete",
+            tone: "danger",
+        });
+        if (!approved) return;
         setActionBusy(true);
         try {
             await deleteSurveyResponse(id, participationId);

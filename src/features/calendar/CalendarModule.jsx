@@ -3,7 +3,6 @@ import CalendarSidebar from "./components/CalendarSidebar";
 import DayView from "./components/DayView";
 import WeekView from "./components/WeekView";
 import MonthView from "./components/MonthView";
-import YearView from "./components/YearView";
 import { useAuth } from "../../context/AuthContext";
 import { getSurveyReleases } from "../../services/surveyApi";
 import { getApprovalItems, getApprovalWorkflows } from "../../services/approvalApi";
@@ -14,13 +13,11 @@ import {
     eventOverlapsRange,
     addDays,
     addMonths,
-    addYears,
     getWeekDays,
     getMonthGridDays,
-    getYearMonths,
 } from "./utils/dateHelpers";
 
-const VIEW_OPTIONS = ["day", "week", "month", "year"];
+const VIEW_OPTIONS = ["day", "week", "month"];
 
 const DEFAULT_EVENT_DURATION_MS = 60 * 60 * 1000;
 
@@ -52,9 +49,37 @@ const CalendarModule = () => {
     const [surveyEvents, setSurveyEvents] = useState([]);
     const [approvalEvents, setApprovalEvents] = useState([]);
     const [allocationEvents, setAllocationEvents] = useState([]);
+    const [reminderEvents, setReminderEvents] = useState([]);
+    const [showReminderForm, setShowReminderForm] = useState(false);
+    const [reminderForm, setReminderForm] = useState({
+        title: "",
+        date: new Date().toISOString().slice(0, 10),
+        notes: "",
+    });
 
     const normalizedRole = String(user?.role || "").toUpperCase();
     const currentUserId = Number(user?.user_id || user?.id || 0) || null;
+    const reminderStorageKey = currentUserId ? `calendar.personalReminders.${currentUserId}` : null;
+
+    useEffect(() => {
+        if (!reminderStorageKey) {
+            setReminderEvents([]);
+            return;
+        }
+
+        try {
+            const raw = localStorage.getItem(reminderStorageKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            setReminderEvents(Array.isArray(parsed) ? parsed : []);
+        } catch {
+            setReminderEvents([]);
+        }
+    }, [reminderStorageKey]);
+
+    useEffect(() => {
+        if (!reminderStorageKey) return;
+        localStorage.setItem(reminderStorageKey, JSON.stringify(reminderEvents));
+    }, [reminderEvents, reminderStorageKey]);
 
     useEffect(() => {
         let active = true;
@@ -223,10 +248,39 @@ const CalendarModule = () => {
     }, [normalizedRole, currentUserId]);
 
     const events = useMemo(() => {
-        const merged = [...surveyEvents, ...allocationEvents, ...approvalEvents];
+        const merged = [...surveyEvents, ...allocationEvents, ...approvalEvents, ...reminderEvents];
         merged.sort((left, right) => new Date(left.start).getTime() - new Date(right.start).getTime());
         return merged;
-    }, [surveyEvents, allocationEvents, approvalEvents]);
+    }, [surveyEvents, allocationEvents, approvalEvents, reminderEvents]);
+
+    const addPersonalReminder = (event) => {
+        event.preventDefault();
+
+        const title = String(reminderForm.title || "").trim();
+        const dateValue = String(reminderForm.date || "").trim();
+        if (!title || !dateValue) return;
+
+        const start = `${dateValue}T09:00:00`;
+        const end = `${dateValue}T09:30:00`;
+
+        const newReminder = {
+            id: `reminder-${Date.now()}`,
+            title,
+            type: "Reminder",
+            start: new Date(start).toISOString(),
+            end: new Date(end).toISOString(),
+            location: reminderForm.notes ? `Note: ${reminderForm.notes}` : "Personal Reminder",
+            allDay: true,
+        };
+
+        setReminderEvents((prev) => [newReminder, ...prev]);
+        setReminderForm({
+            title: "",
+            date: new Date().toISOString().slice(0, 10),
+            notes: "",
+        });
+        setShowReminderForm(false);
+    };
 
     const eventsForSelectedDay = useMemo(() => {
         const dayStart = startOfDay(selectedDate);
@@ -236,20 +290,17 @@ const CalendarModule = () => {
 
     const monthDays = useMemo(() => getMonthGridDays(selectedDate), [selectedDate]);
     const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
-    const yearMonths = useMemo(() => getYearMonths(selectedDate), [selectedDate]);
 
     const handlePrev = () => {
         if (view === "day") setSelectedDate(addDays(selectedDate, -1));
         if (view === "week") setSelectedDate(addDays(selectedDate, -7));
         if (view === "month") setSelectedDate(addMonths(selectedDate, -1));
-        if (view === "year") setSelectedDate(addYears(selectedDate, -1));
     };
 
     const handleNext = () => {
         if (view === "day") setSelectedDate(addDays(selectedDate, 1));
         if (view === "week") setSelectedDate(addDays(selectedDate, 7));
         if (view === "month") setSelectedDate(addMonths(selectedDate, 1));
-        if (view === "year") setSelectedDate(addYears(selectedDate, 1));
     };
 
     return (
@@ -283,8 +334,58 @@ const CalendarModule = () => {
                         <span className="rounded-full bg-purple-50 px-2 py-1 text-purple-700">Survey</span>
                         <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">Allocation</span>
                         <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">Approval</span>
+                        <span className="rounded-full bg-rose-50 px-2 py-1 text-rose-700">Reminder</span>
+                        <button
+                            type="button"
+                            onClick={() => setShowReminderForm((prev) => !prev)}
+                            className="rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-800"
+                        >
+                            + Add
+                        </button>
                     </div>
                 </div>
+
+                {showReminderForm && (
+                    <form onSubmit={addPersonalReminder} className="mx-6 mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                            <input
+                                value={reminderForm.title}
+                                onChange={(event) => setReminderForm((prev) => ({ ...prev, title: event.target.value }))}
+                                placeholder="Reminder title"
+                                className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                                required
+                            />
+                            <input
+                                type="date"
+                                value={reminderForm.date}
+                                onChange={(event) => setReminderForm((prev) => ({ ...prev, date: event.target.value }))}
+                                className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                                required
+                            />
+                            <input
+                                value={reminderForm.notes}
+                                onChange={(event) => setReminderForm((prev) => ({ ...prev, notes: event.target.value }))}
+                                placeholder="Notes (optional)"
+                                className="md:col-span-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                            />
+                        </div>
+                        <div className="mt-3 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowReminderForm(false)}
+                                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700"
+                            >
+                                Save Reminder
+                            </button>
+                        </div>
+                    </form>
+                )}
 
                 {(loading || error) && (
                     <div className="px-6 pt-3 text-xs">
@@ -340,14 +441,6 @@ const CalendarModule = () => {
                         <MonthView
                             days={monthDays}
                             selectedDate={selectedDate}
-                            events={events}
-                            onSelectDate={setSelectedDate}
-                        />
-                    )}
-
-                    {view === "year" && (
-                        <YearView
-                            months={yearMonths}
                             events={events}
                             onSelectDate={setSelectedDate}
                         />

@@ -2,6 +2,7 @@ import { Activity, ArrowLeft, BadgeCheck, BookOpen, CalendarDays, Mail, Phone, S
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
+import { useConfirmation } from "../../../context/ConfirmationContext";
 import {
     assignUserRole,
     getAvailableRoles,
@@ -37,6 +38,7 @@ const UserProfilePage = () => {
     const navigate = useNavigate();
     const { id } = useParams();
     const { token, user: currentUser } = useAuth();
+    const { confirm } = useConfirmation();
     const [profileData, setProfileData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -192,7 +194,14 @@ const UserProfilePage = () => {
     };
 
     const handleRemoveRole = async (roleName) => {
-        if (!window.confirm(`Remove role ${roleName} from this user?`)) return;
+        const approved = await confirm({
+            title: "Remove Role",
+            message: `Remove role ${roleName} from this user?`,
+            confirmText: "Remove",
+            tone: "warning",
+        });
+        if (!approved) return;
+
         try {
             setRoleBusy(true);
             setError("");
@@ -271,8 +280,8 @@ const UserProfilePage = () => {
                         </div>
                     </div>
                 </div>
-                    <div className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${profile.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                        {profile.is_active ? "Active access" : "Access disabled"}
+                <div className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${profile.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                    {profile.is_active ? "Active access" : "Access disabled"}
                 </div>
             </div>
 

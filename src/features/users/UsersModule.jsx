@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, Lock, LockOpen, Pencil, Search, Trash2, UserPlus, X } from "lucide-react";
+import { Check, Lock, LockOpen, Pencil, Search, Trash2, UserPlus, X } from "lucide-react";
 import ExcelImporter from "../groups/components/ExcelImporter";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useConfirmation } from "../../context/ConfirmationContext";
 import { createUser, deleteUser, listUsers, updateUser } from "../../services/userService";
 
 const PAGE_SIZES = [10, 15, 25];
@@ -10,6 +11,7 @@ const PAGE_SIZES = [10, 15, 25];
 const UsersModule = () => {
     const navigate = useNavigate();
     const { token, user } = useAuth();
+    const { confirm } = useConfirmation();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -18,7 +20,6 @@ const UsersModule = () => {
     const [categoryFilter, setCategoryFilter] = useState("ALL");
     const [editingId, setEditingId] = useState(null);
     const [editDraft, setEditDraft] = useState({});
-    const [pendingDeleteUser, setPendingDeleteUser] = useState(null);
     const [pageSize, setPageSize] = useState(10);
     const [currentPage, setCurrentPage] = useState(1);
 
@@ -154,7 +155,6 @@ const UsersModule = () => {
     const removeUser = async (userId) => {
         try {
             await deleteUser(token, userId);
-            setPendingDeleteUser(null);
             await loadUsers();
         } catch (err) {
             setError(err?.message || "Failed to delete user.");
@@ -162,6 +162,16 @@ const UsersModule = () => {
     };
 
     const toggleUserFreeze = async (row) => {
+        const approved = await confirm({
+            title: row.is_active ? "Freeze User" : "Enable User",
+            message: row.is_active
+                ? "Are you sure you want to freeze this user account?"
+                : "Are you sure you want to enable this user account?",
+            confirmText: row.is_active ? "Freeze" : "Enable",
+            tone: "warning",
+        });
+        if (!approved) return;
+
         try {
             setError("");
             await updateUser(token, row.user_id, { is_active: !row.is_active });
@@ -305,9 +315,16 @@ const UsersModule = () => {
                                                     }} className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${user.is_active ? "bg-amber-50 text-amber-700 hover:bg-amber-100" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`} aria-label={user.is_active ? "Freeze user" : "Enable user"} title={user.is_active ? "Freeze user" : "Enable user"}>
                                                         {user.is_active ? <Lock size={16} /> : <LockOpen size={16} />}
                                                     </button>
-                                                    <button onClick={(event) => {
+                                                    <button onClick={async (event) => {
                                                         event.stopPropagation();
-                                                        setPendingDeleteUser(user);
+                                                        const approved = await confirm({
+                                                            title: "Delete User",
+                                                            message: "Are you sure you want to delete this user? This action cannot be undone.",
+                                                            confirmText: "Delete",
+                                                            tone: "danger",
+                                                        });
+                                                        if (!approved) return;
+                                                        await removeUser(user.user_id);
                                                     }} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100" aria-label="Delete user">
                                                         <Trash2 size={16} />
                                                     </button>
@@ -366,37 +383,6 @@ const UsersModule = () => {
                 </div>
             </div>
 
-            {pendingDeleteUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 px-4 backdrop-blur-[2px]">
-                    <div className="w-full max-w-sm rounded-[28px] bg-white p-6 text-center shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-                        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-400">
-                            <AlertCircle size={20} strokeWidth={2.25} />
-                        </div>
-                        <h3 className="text-2xl font-semibold tracking-tight text-slate-900">Delete User</h3>
-                        <p className="mt-3 text-sm leading-6 text-slate-500">
-                            Are you sure you want to delete this user?
-                            <br />
-                            This action cannot be undone.
-                        </p>
-                        <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setPendingDeleteUser(null)}
-                                className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-200"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => removeUser(pendingDeleteUser.user_id)}
-                                className="rounded-xl bg-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-600"
-                            >
-                                Confirm
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 };

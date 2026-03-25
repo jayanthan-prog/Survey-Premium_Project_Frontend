@@ -39,6 +39,22 @@ export async function updateCurrentUser(token, profile) {
     });
 }
 
+export async function updateUserPreferences(token, preferences) {
+    return apiRequest("/api/auth/me/preferences", {
+        method: "PATCH",
+        token,
+        body: preferences,
+    });
+}
+
+export async function updateUserPassword(token, payload) {
+    return apiRequest("/api/auth/me/password", {
+        method: "PATCH",
+        token,
+        body: payload,
+    });
+}
+
 export async function logoutRequest(token) {
     return apiRequest("/api/auth/logout", {
         method: "POST",
