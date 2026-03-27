@@ -90,6 +90,10 @@ export const defaultSurveyState = {
     themeColor: "#0ea5e9",
     maxResponses: "",
     responseCategoryLimits: [],
+    mailDraft: {
+        subject: "",
+        body: "",
+    },
     targetGroups: [],
     targetUserIds: [],
     pages: [createPage("Page 1")],
@@ -209,6 +213,10 @@ export const normalizeApiSurvey = (survey) => {
         responseCategoryLimits: Array.isArray(config.responseCategoryLimits)
             ? config.responseCategoryLimits
             : (Array.isArray(config.responseQuotas) ? config.responseQuotas : []),
+        mailDraft: {
+            subject: String(config?.mailDraft?.subject || ""),
+            body: String(config?.mailDraft?.body || ""),
+        },
         targetGroups: Array.isArray(config.targetGroups) ? config.targetGroups : [],
         targetUserIds: Array.isArray(config.targetUserIds)
             ? config.targetUserIds.map((value) => String(value))

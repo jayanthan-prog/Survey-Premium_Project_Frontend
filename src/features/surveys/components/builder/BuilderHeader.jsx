@@ -1,4 +1,4 @@
-import { AlertTriangle, Eye, Save, WandSparkles } from "lucide-react";
+import { AlertTriangle, Eye, Mail, Save, WandSparkles } from "lucide-react";
 
 const BuilderHeader = ({
     survey,
@@ -7,6 +7,7 @@ const BuilderHeader = ({
     publishing,
     error,
     onTitleChange,
+    onOpenMailDraft,
     onPreview,
     onSave,
     onPublish,
@@ -15,7 +16,7 @@ const BuilderHeader = ({
         <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Survey Builder</div>
+                    {/* <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Survey Builder</div> */}
                     <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center">
                         <input
                             value={survey.title}
@@ -27,6 +28,14 @@ const BuilderHeader = ({
                     </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={onOpenMailDraft}
+                        className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100"
+                    >
+                        <Mail size={16} />
+                        Mail Draft
+                    </button>
                     <button
                         type="button"
                         onClick={onPreview}

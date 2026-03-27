@@ -7,6 +7,7 @@ import { listGroups } from "../../../services/groupService";
 import { listUsers } from "../../../services/userService";
 import { createSurvey, getSurveyById, publishSurvey, updateSurvey as updateSurveyApi } from "../../../services/surveyApi";
 import BuilderHeader from "../components/builder/BuilderHeader";
+import BuilderMailDraftModal from "../components/builder/BuilderMailDraftModal";
 import BuilderPageSection from "../components/builder/BuilderPageSection";
 import BuilderRightPanel from "../components/builder/BuilderRightPanel";
 import PaletteQuestionType from "../components/builder/PaletteQuestionType";
@@ -47,6 +48,7 @@ const SurveyBuilderPage = () => {
     const [error, setError] = useState("");
     const [autosaveText, setAutosaveText] = useState("");
     const [activeDrag, setActiveDrag] = useState(null);
+    const [mailDraftOpen, setMailDraftOpen] = useState(false);
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -159,6 +161,15 @@ const SurveyBuilderPage = () => {
         return () => window.clearInterval(timer);
     }, [survey]);
 
+    useEffect(() => () => {
+        const preserveForPreview = sessionStorage.getItem("survey.builder.keepDraft") === "1";
+        if (preserveForPreview) {
+            sessionStorage.removeItem("survey.builder.keepDraft");
+            return;
+        }
+        localStorage.removeItem(BUILDER_AUTOSAVE_KEY);
+    }, []);
+
     const allQuestions = useMemo(() => flattenQuestions(survey.pages), [survey.pages]);
     const questionMap = useMemo(() => buildQuestionMap(allQuestions), [allQuestions]);
 
@@ -180,6 +191,38 @@ const SurveyBuilderPage = () => {
         if (!page) return null;
         return page.questions.find((entry) => entry.id === selectedQuestionRef.questionId) || null;
     }, [selectedQuestionRef, survey.pages]);
+
+    const defaultMailDraft = useMemo(() => {
+        const title = String(survey.title || "").trim() || "Untitled Survey";
+        const deadlineValue = String(survey.endDate || "").trim();
+        const formattedDeadline = deadlineValue
+            ? new Date(deadlineValue).toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+            })
+            : "To be announced";
+
+        return {
+            subject: `Survey Invitation: ${title}`,
+            body: [
+                "Hello,",
+                "",
+                `A new survey has been created: ${title}.`,
+                `Please submit your response before ${formattedDeadline}.`,
+                "",
+                "Thank you.",
+            ].join("\n"),
+        };
+    }, [survey.endDate, survey.title]);
+
+    const mailDraft = useMemo(() => {
+        const stored = survey.mailDraft || {};
+        return {
+            subject: typeof stored.subject === "string" ? stored.subject : defaultMailDraft.subject,
+            body: typeof stored.body === "string" ? stored.body : defaultMailDraft.body,
+        };
+    }, [defaultMailDraft, survey.mailDraft]);
 
     const updateSurveyState = (patch) => {
         setSurvey((prev) => ({ ...prev, ...patch }));
@@ -427,6 +470,10 @@ const SurveyBuilderPage = () => {
             targetUserIds: (Array.isArray(survey.targetUserIds) ? survey.targetUserIds : [])
                 .map((value) => Number(value))
                 .filter((value) => Number.isInteger(value) && value > 0),
+            mailDraft: {
+                subject: String(mailDraft.subject || ""),
+                body: String(mailDraft.body || ""),
+            },
             targetGroupIds: groupOptions
                 .filter((group) => survey.targetGroups.includes(group.value))
                 .map((group) => group.id)
@@ -511,6 +558,7 @@ const SurveyBuilderPage = () => {
     };
 
     const previewSurvey = () => {
+        sessionStorage.setItem("survey.builder.keepDraft", "1");
         localStorage.setItem(BUILDER_AUTOSAVE_KEY, JSON.stringify({ survey, updatedAt: Date.now() }));
         navigate(`${roleBasePath}/surveys/preview`, { state: { draft: survey } });
     };
@@ -528,9 +576,20 @@ const SurveyBuilderPage = () => {
                 publishing={publishing}
                 error={error}
                 onTitleChange={(value) => updateSurveyState({ title: value })}
+                onOpenMailDraft={() => setMailDraftOpen(true)}
                 onPreview={previewSurvey}
                 onSave={saveSurvey}
                 onPublish={publishCurrentSurvey}
+            />
+
+            <BuilderMailDraftModal
+                open={mailDraftOpen}
+                onClose={() => setMailDraftOpen(false)}
+                subject={mailDraft.subject}
+                body={mailDraft.body}
+                onSubjectChange={(value) => updateSurveyState({ mailDraft: { ...mailDraft, subject: value } })}
+                onBodyChange={(value) => updateSurveyState({ mailDraft: { ...mailDraft, body: value } })}
+                onReset={() => updateSurveyState({ mailDraft: defaultMailDraft })}
             />
 
             <DndContext
