@@ -1,6 +1,26 @@
 const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || "http://localhost:4000").replace(/\/$/, "");
 
-function buildHeaders(token, hasBody) {
+let publicIpPromise = null;
+
+async function resolveClientPublicIp() {
+    if (publicIpPromise) return publicIpPromise;
+
+    publicIpPromise = (async () => {
+        try {
+            const response = await fetch("https://api.ipify.org?format=json", { method: "GET" });
+            if (!response.ok) return null;
+            const payload = await response.json();
+            const value = String(payload?.ip || "").trim();
+            return value || null;
+        } catch (_err) {
+            return null;
+        }
+    })();
+
+    return publicIpPromise;
+}
+
+function buildHeaders(token, hasBody, clientPublicIp) {
     const headers = {
         Accept: "application/json",
     };
@@ -13,13 +33,19 @@ function buildHeaders(token, hasBody) {
         headers.Authorization = `Bearer ${token}`;
     }
 
+    if (clientPublicIp) {
+        headers["X-Client-Public-IP"] = clientPublicIp;
+    }
+
     return headers;
 }
 
 export async function apiRequest(path, { method = "GET", body, token } = {}) {
+    const clientPublicIp = await resolveClientPublicIp();
+
     const response = await fetch(`${API_BASE_URL}${path}`, {
         method,
-        headers: buildHeaders(token, body !== undefined),
+        headers: buildHeaders(token, body !== undefined, clientPublicIp),
         body: body !== undefined ? JSON.stringify(body) : undefined,
     });
 

@@ -304,7 +304,7 @@ const CalendarModule = () => {
     };
 
     return (
-        <div className="flex h-full bg-slate-50">
+        <div className="flex h-full min-h-0 min-w-0 overflow-hidden bg-slate-50">
 
             {/* Sidebar */}
             <CalendarSidebar
@@ -316,9 +316,9 @@ const CalendarModule = () => {
             />
 
             {/* Main Calendar Area */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
                 {/* Top Header */}
-                <div className="border-b border-slate-200 bg-white p-4 flex items-center justify-between">
+                <div className="border-b border-slate-200 bg-white p-4 flex min-w-0 items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-semibold text-slate-900">
                             {selectedDate.toLocaleDateString("en-US", {
@@ -326,11 +326,8 @@ const CalendarModule = () => {
                                 year: "numeric",
                             })}
                         </h1>
-                        <p className="mt-1 text-xs text-slate-500">
-                            Unified timeline: Survey releases, allocations, and approvals.
-                        </p>
                     </div>
-                    <div className="flex items-center gap-3 text-xs">
+                    <div className="flex min-w-0 items-center gap-2 text-xs">
                         <span className="rounded-full bg-purple-50 px-2 py-1 text-purple-700">Survey</span>
                         <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">Allocation</span>
                         <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">Approval</span>
@@ -395,7 +392,7 @@ const CalendarModule = () => {
                 )}
 
                 {/* View Controls */}
-                <div className="border-b border-slate-200 bg-white px-6 py-3 flex items-center gap-2">
+                <div className="border-b border-slate-200 bg-white px-6 py-3 flex min-w-0 items-center gap-2">
                     <div className="flex items-center gap-1 rounded-lg border border-slate-200 p-1">
                         {VIEW_OPTIONS.map((option) => (
                             <button
@@ -420,7 +417,7 @@ const CalendarModule = () => {
                 </div>
 
                 {/* Calendar Content */}
-                <div className="flex-1 flex flex-col overflow-auto p-6">
+                <div className="flex-1 min-w-0 flex flex-col overflow-hidden p-6">
                     {view === "day" && (
                         <DayView
                             date={selectedDate}
@@ -438,12 +435,14 @@ const CalendarModule = () => {
                     )}
 
                     {view === "month" && (
-                        <MonthView
-                            days={monthDays}
-                            selectedDate={selectedDate}
-                            events={events}
-                            onSelectDate={setSelectedDate}
-                        />
+                        <div className="flex-1 min-h-0 overflow-hidden">
+                            <MonthView
+                                days={monthDays}
+                                selectedDate={selectedDate}
+                                events={events}
+                                onSelectDate={setSelectedDate}
+                            />
+                        </div>
                     )}
                 </div>
             </div>

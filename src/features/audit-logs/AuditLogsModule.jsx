@@ -64,6 +64,7 @@ const AuditLogsModule = () => {
                         entity,
                         description,
                         actor,
+                        ipAddress: item?.ip_address || "-",
                         outcome,
                     };
                 });
@@ -101,7 +102,7 @@ const AuditLogsModule = () => {
             if (!outcomeMatch) return false;
 
             if (!query) return true;
-            return [item.timestamp, item.module, item.activity, item.entity, item.description, item.actor, item.outcome]
+            return [item.timestamp, item.module, item.activity, item.entity, item.description, item.actor, item.ipAddress, item.outcome]
                 .join(" ")
                 .toLowerCase()
                 .includes(query);
@@ -119,6 +120,7 @@ const AuditLogsModule = () => {
             Entity: row.entity,
             Description: row.description,
             Actor: row.actor,
+            "IP Address": row.ipAddress,
             Outcome: row.outcome,
         }));
 
@@ -194,20 +196,21 @@ const AuditLogsModule = () => {
                                 <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Entity</th>
                                 <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Description</th>
                                 <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Actor</th>
+                                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">IP Address</th>
                                 <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Outcome</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {loading && (
                                 <tr>
-                                    <td className="px-4 py-8 text-sm text-gray-500 text-center" colSpan={7}>
+                                    <td className="px-4 py-8 text-sm text-gray-500 text-center" colSpan={8}>
                                         Loading audit logs...
                                     </td>
                                 </tr>
                             )}
                             {!loading && error && (
                                 <tr>
-                                    <td className="px-4 py-8 text-sm text-rose-600 text-center" colSpan={7}>
+                                    <td className="px-4 py-8 text-sm text-rose-600 text-center" colSpan={8}>
                                         {error}
                                     </td>
                                 </tr>
@@ -220,6 +223,7 @@ const AuditLogsModule = () => {
                                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{log.entity}</td>
                                     <td className="px-4 py-3 text-sm text-gray-600 max-w-[380px]">{log.description}</td>
                                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{log.actor}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{log.ipAddress}</td>
                                     <td className="px-4 py-3 whitespace-nowrap">
                                         <span className={`px-2 py-1 rounded-md text-[10px] font-semibold uppercase ${toneByOutcome[log.outcome] || "bg-gray-100 text-gray-700"}`}>
                                             {log.outcome}
@@ -229,7 +233,7 @@ const AuditLogsModule = () => {
                             ))}
                             {!loading && !error && !filteredLogs.length && (
                                 <tr>
-                                    <td className="px-4 py-8 text-sm text-gray-500 text-center" colSpan={7}>
+                                    <td className="px-4 py-8 text-sm text-gray-500 text-center" colSpan={8}>
                                         No audit logs found for the selected filters.
                                     </td>
                                 </tr>

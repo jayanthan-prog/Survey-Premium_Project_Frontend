@@ -39,6 +39,7 @@ export const StudentDashboard = () => {
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [pendingSurveyCount, setPendingSurveyCount] = useState(0);
 
     useEffect(() => {
         let active = true;
@@ -97,9 +98,27 @@ export const StudentDashboard = () => {
                     .slice(0, 6)
                     .map((group) => ({ name: group?.name || "Untitled Group" }));
 
+                const myParticipantRows = participantList.filter((item) => String(item?.user_id) === String(user?.user_id));
+                const completedSurveyIds = new Set(
+                    myParticipantRows
+                        .filter((item) => String(item?.status || "").toUpperCase() === "COMPLETED")
+                        .map((item) => Number(item?.survey_id))
+                        .filter((value) => Number.isInteger(value) && value > 0)
+                );
+
+                // Student surveys endpoint returns visible/published surveys for the user.
+                const visibleSurveyIds = new Set(
+                    surveyList
+                        .map((item) => Number(item?.survey_id))
+                        .filter((value) => Number.isInteger(value) && value > 0)
+                );
+
+                const derivedPendingCount = Array.from(visibleSurveyIds).filter((surveyId) => !completedSurveyIds.has(surveyId)).length;
+
                 setTodayTasks(myTasks);
                 setUpcomingActivities(upcoming);
                 setGroups(myGroups);
+                setPendingSurveyCount(derivedPendingCount);
             } catch (err) {
                 if (!active) return;
                 setError(err?.message || "Failed to load dashboard data.");
@@ -118,10 +137,10 @@ export const StudentDashboard = () => {
 
     const stats = useMemo(() => [
         { name: "Surveys Completed", value: overview.my_completed || 0, icon: ClipboardList, color: "text-green-600", bg: "bg-green-50" },
-        { name: "Surveys Pending", value: (overview.my_invited || 0) + (overview.my_started || 0), icon: ClipboardList, color: "text-yellow-600", bg: "bg-yellow-50" },
+        { name: "Surveys Pending", value: pendingSurveyCount, icon: ClipboardList, color: "text-yellow-600", bg: "bg-yellow-50" },
         { name: "Survey Answers", value: overview.my_answers || 0, icon: ClipboardList, color: "text-red-600", bg: "bg-red-50" },
         { name: "Tasks Allocated", value: overview.action_plans_pending || 0, icon: BarChart3, color: "text-blue-600", bg: "bg-blue-50" },
-    ], [overview]);
+    ], [overview, pendingSurveyCount]);
 
     return (
         <div className="space-y-8">
