@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import ExcelImporter from "./ExcelImporter";
+import HoverProfile from "../../../components/profile/HoverProfile";
 
 const UserListInput = ({
     label,
@@ -13,33 +14,76 @@ const UserListInput = ({
     const inputClassName = "flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none";
     const labelClassName = "text-xs font-medium text-gray-500";
 
-    const normalizedOptions = useMemo(
-        () => options.map((option) => {
-            if (typeof option === "string") {
-                return { value: option.trim(), label: option.trim() };
-            }
+    const normalizedOptions = useMemo(() => {
+        return options
+            .map((option) => {
+                if (typeof option === "string") {
+                    const value = option.trim();
+                    return { value, label: value, user: null };
+                }
 
-            return {
-                value: String(option?.value || option?.id || option?.email || option?.name || "").trim(),
-                label: String(option?.label || option?.name || option?.email || option?.value || "").trim(),
-            };
-        }).filter((option) => option.value),
-        [options]
-    );
+                const user = option?.user && typeof option.user === "object" ? option.user : null;
+                const value = String(option?.value || option?.id || user?.email || user?.name || option?.email || option?.name || "").trim();
+                const label = String(option?.label || user?.name || option?.name || user?.email || option?.email || option?.value || value || "").trim();
 
-    const optionLookup = useMemo(
-        () => new Map(normalizedOptions.map((option) => [option.value, option.label])),
-        [normalizedOptions]
-    );
+                const email = String(user?.email || option?.email || "").trim();
+                const name = String(user?.name || option?.name || "").trim();
+
+                return {
+                    value,
+                    label,
+                    user,
+                    name,
+                    email,
+                };
+            })
+            .filter((option) => option.value);
+    }, [options]);
+
+    const optionLookup = useMemo(() => new Map(normalizedOptions.map((option) => [option.value, option])), [normalizedOptions]);
 
     const filteredOptions = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase();
         return normalizedOptions.filter((option) => {
             if (items.includes(option.value)) return false;
             if (!normalizedQuery) return true;
-            return option.label.toLowerCase().includes(normalizedQuery) || option.value.toLowerCase().includes(normalizedQuery);
+            const haystack = [option.label, option.value, option.name, option.email]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase();
+            return haystack.includes(normalizedQuery);
         }).slice(0, 8);
     }, [normalizedOptions, items, query]);
+
+    const buildInitials = (text) => {
+        const value = String(text || "User").trim();
+        const parts = value.split(/\s+/).filter(Boolean).slice(0, 2);
+        return parts.map((part) => part[0]?.toUpperCase() || "U").join("").slice(0, 2) || "U";
+    };
+
+    const renderOptionRow = (option) => {
+        const user = option.user;
+        const name = String(option.name || user?.name || option.label || "User").trim() || "User";
+        const email = String(option.email || user?.email || (option.value || "")).trim();
+        const attributes = user?.attributes && typeof user.attributes === "object" ? user.attributes : {};
+        const avatarUrl = user?.avatar_url || user?.avatarUrl || attributes.avatarUrl || attributes.profilePictureUrl || "";
+        const initials = buildInitials(name || email);
+
+        const content = (
+            <span className="flex min-w-0 items-center gap-3">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 text-xs font-semibold text-white">
+                    {avatarUrl ? <img src={avatarUrl} alt={name} className="h-full w-full object-cover" /> : initials}
+                </span>
+                <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-slate-900">{name}</span>
+                    <span className="block truncate text-xs text-slate-500">{email}</span>
+                </span>
+            </span>
+        );
+
+        if (!user) return content;
+        return <HoverProfile user={user}>{content}</HoverProfile>;
+    };
 
     const normalizeImportedItem = (item) => {
         if (typeof item === "string") {
@@ -114,7 +158,7 @@ const UserListInput = ({
                                 onClick={() => addItem(option.value)}
                                 className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-700 hover:bg-purple-50"
                             >
-                                <span>{option.label}</span>
+                                {renderOptionRow(option)}
                             </button>
                         ))}
                     </div>
@@ -125,19 +169,36 @@ const UserListInput = ({
 
             <div className="flex flex-wrap gap-2 mt-3">
                 {items.map((item, index) => (
-                    <span
-                        key={`${item}-${index}`}
-                        className="bg-purple-50 text-purple-700 px-2 py-1 rounded-full text-xs flex items-center gap-1"
-                    >
-                        {optionLookup.get(item) || item}
-                        <button
-                            type="button"
-                            onClick={() => removeItem(index)}
-                            className="text-purple-600"
-                        >
-                            ✕
-                        </button>
-                    </span>
+                    (() => {
+                        const option = optionLookup.get(item);
+                        const user = option?.user;
+                        const name = String(option?.name || option?.label || item).trim();
+                        const email = String(option?.email || (option?.value || item)).trim();
+                        const chipBody = (
+                            <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded-full text-xs flex items-center gap-1">
+                                <span className="max-w-[240px] truncate">{name || email}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => removeItem(index)}
+                                    className="text-purple-600"
+                                >
+                                    ✕
+                                </button>
+                            </span>
+                        );
+
+                        if (!user) {
+                            return (
+                                <span key={`${item}-${index}`}>{chipBody}</span>
+                            );
+                        }
+
+                        return (
+                            <HoverProfile key={`${item}-${index}`} user={user}>
+                                {chipBody}
+                            </HoverProfile>
+                        );
+                    })()
                 ))}
             </div>
         </div>

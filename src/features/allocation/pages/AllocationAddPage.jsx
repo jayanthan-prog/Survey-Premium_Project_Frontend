@@ -216,7 +216,7 @@ const AllocationAddPage = () => {
                             setItems={setTeachers}
                             options={directoryUsers.map((entry) => ({
                                 value: String(entry.user_id),
-                                label: entry.email ? `${entry.name} <${entry.email}>` : entry.name,
+                                user: entry,
                             }))}
                             placeholder="Type teacher name and press Enter..."
                         />
@@ -226,7 +226,7 @@ const AllocationAddPage = () => {
                             setItems={setStudents}
                             options={directoryUsers.map((entry) => ({
                                 value: String(entry.user_id),
-                                label: entry.email ? `${entry.name} <${entry.email}>` : entry.name,
+                                user: entry,
                             }))}
                             placeholder="Type student name and press Enter..."
                         />

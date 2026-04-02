@@ -227,7 +227,7 @@ const GroupBuilderPage = () => {
                     setItems={setApprovers}
                     options={directoryUsers.map((entry) => ({
                         value: entry.email || entry.name,
-                        label: entry.email ? `${entry.name} <${entry.email}>` : entry.name,
+                        user: entry,
                     }))}
                     placeholder="Type approver email or name and press Enter..."
                 />
@@ -239,7 +239,7 @@ const GroupBuilderPage = () => {
                     setItems={setParticipants}
                     options={directoryUsers.map((entry) => ({
                         value: entry.email || entry.name,
-                        label: entry.email ? `${entry.name} <${entry.email}>` : entry.name,
+                        user: entry,
                     }))}
                     placeholder="Type participant email or name and press Enter..."
                 />
