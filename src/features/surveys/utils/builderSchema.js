@@ -97,6 +97,7 @@ export const createQuestion = (type = "short_text") => {
     const selectionRules = {
         maxPrimary: type === "priority_select" ? 3 : type === "multi_level_selection" ? 2 : 0,
         maxSecondary: type === "multi_level_selection" ? 2 : 0,
+        maxSpecial: type === "multi_level_selection" ? 0 : 0,
         preventDuplicate: isSelectionType,
     };
 

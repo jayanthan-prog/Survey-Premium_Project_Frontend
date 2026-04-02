@@ -126,11 +126,12 @@ const toSelectionArray = (value) => (Array.isArray(value) ? value.map((entry) =>
 
 const normalizeSelectionObject = (value) => {
     if (!value || typeof value !== "object") {
-        return { primary: [], secondary: [] };
+        return { primary: [], secondary: [], special: [] };
     }
     return {
         primary: toSelectionArray(value.primary),
         secondary: toSelectionArray(value.secondary),
+        special: toSelectionArray(value.special),
     };
 };
 
@@ -156,14 +157,66 @@ const normalizeSkipLogic = (logic) => {
     };
 };
 
+const normalizeSelectionRules = (value) => {
+    if (Array.isArray(value)) {
+        const reduced = {};
+        value.forEach((entry) => {
+            const key = String(entry?.key ?? entry?.type ?? "").trim();
+            if (!key) return;
+            reduced[key] = entry?.value;
+        });
+        return reduced;
+    }
+    if (value && typeof value === "object") return value;
+    return {};
+};
+
 const normalizePages = (pages, questions) => {
-    if (Array.isArray(pages) && pages.length > 0) {
+    const serverQuestions = Array.isArray(questions) ? questions : [];
+
+    if (!Array.isArray(pages) || pages.length === 0) {
+        return serverQuestions.length ? [{ id: "page1", title: "Questions", questions: serverQuestions }] : [];
+    }
+
+    if (!serverQuestions.length) {
         return pages;
     }
-    if (Array.isArray(questions) && questions.length > 0) {
-        return [{ id: "page1", title: "Questions", questions }];
+
+    const byId = new Map(serverQuestions.map((q) => [String(q.id), q]));
+    const flatRefs = pages.flatMap((page) => (Array.isArray(page?.questions) ? page.questions : []));
+
+    const canMapById = flatRefs.length > 0 && flatRefs.every((ref) => {
+        const legacyId = ref && typeof ref === "object"
+            ? (ref.id ?? ref.question_id ?? ref.questionId)
+            : ref;
+        return legacyId != null && byId.has(String(legacyId));
+    });
+
+    if (canMapById) {
+        return pages.map((page) => ({
+            ...page,
+            questions: (Array.isArray(page?.questions) ? page.questions : [])
+                .map((ref) => {
+                    const legacyId = ref && typeof ref === "object"
+                        ? (ref.id ?? ref.question_id ?? ref.questionId)
+                        : ref;
+                    return byId.get(String(legacyId));
+                })
+                .filter(Boolean),
+        }));
     }
-    return [];
+
+    if (flatRefs.length > 0 && flatRefs.length === serverQuestions.length) {
+        let index = 0;
+        return pages.map((page) => ({
+            ...page,
+            questions: (Array.isArray(page?.questions) ? page.questions : [])
+                .map(() => serverQuestions[index++])
+                .filter(Boolean),
+        }));
+    }
+
+    return [{ id: "page1", title: "Questions", questions: serverQuestions }];
 };
 
 export default function TakeSurveyPage() {
@@ -290,24 +343,10 @@ export default function TakeSurveyPage() {
     const pages = useMemo(() => normalizePages(survey?.pages, survey?.questions), [survey?.pages, survey?.questions]);
 
     const currentPage = useMemo(() => pages[currentPageIndex] || pages[0] || { id: "default", title: "Questions", questions: [] }, [pages, currentPageIndex]);
-    const pageQuestions = useMemo(() => {
-        if (!currentPage) return [];
-        if (Array.isArray(currentPage.questions)) {
-            return currentPage.questions.map((q) => {
-                const legacyId = q && typeof q === "object"
-                    ? (q.id ?? q.question_id ?? q.questionId)
-                    : q;
-                const legacyText = q && typeof q === "object" ? (q.text ?? q.question_text) : "";
-
-                const fullQ = questions.find((fq) => (
-                    String(fq.id) === String(legacyId)
-                    || normalizeTextKey(fq.text) === normalizeTextKey(legacyText)
-                ));
-                return fullQ || q;
-            });
-        }
-        return [];
-    }, [currentPage, questions]);
+    const pageQuestions = useMemo(
+        () => (Array.isArray(currentPage?.questions) ? currentPage.questions : []),
+        [currentPage]
+    );
 
     const updateGroupMember = (groupId, index, field, value) => {
         setAnswers((prev) => {
@@ -418,14 +457,61 @@ export default function TakeSurveyPage() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        const parseValidation = (value) => {
+            if (!value || typeof value !== "object") return {};
+            return {
+                minLength: value.minLength === "" || value.minLength == null ? null : Math.max(0, Number(value.minLength) || 0),
+                maxLength: value.maxLength === "" || value.maxLength == null ? null : Math.max(0, Number(value.maxLength) || 0),
+                regex: String(value.regex || "").trim(),
+                email: Boolean(value.email),
+            };
+        };
+
+        const isEmailLike = (text) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(text || "").trim());
+
+        const validateText = (question, value, validation) => {
+            const text = value == null ? "" : String(value);
+
+            if (validation.minLength != null && text.length < validation.minLength) {
+                setError(`${question.text} must be at least ${validation.minLength} characters.`);
+                return false;
+            }
+            if (validation.maxLength != null && text.length > validation.maxLength) {
+                setError(`${question.text} must be at most ${validation.maxLength} characters.`);
+                return false;
+            }
+            if (validation.email && text && !isEmailLike(text)) {
+                setError(`${question.text} must be a valid email address.`);
+                return false;
+            }
+            if (validation.regex) {
+                try {
+                    const pattern = new RegExp(validation.regex);
+                    if (text && !pattern.test(text)) {
+                        setError(`${question.text} is not in the required format.`);
+                        return false;
+                    }
+                } catch {
+                    setError(`Validation pattern is invalid for: ${question.text}`);
+                    return false;
+                }
+            }
+
+            return true;
+        };
+
         // Validate all questions in current page
         for (const question of visibleQuestions) {
             const questionId = String(question.id);
             const questionType = normalizeQuestionType(question.type);
             const value = answers[questionId];
             const choiceOptions = getChoiceOptions(question);
+            const validation = parseValidation(question.validation);
             if (!question.required) {
                 // Still validate constraints for optional fields
+                if ((questionType === "short_text" || questionType === "long_text") && hasValue(value)) {
+                    if (!validateText(question, value, validation)) return;
+                }
                 if (questionType === "number" && value != null) {
                     if (question.min != null && Number(value) < question.min) {
                         setError(`${question.text} must be at least ${question.min}`);
@@ -459,9 +545,10 @@ export default function TakeSurveyPage() {
 
             if (questionType === "multi_level_selection") {
                 const selection = normalizeSelectionObject(value);
-                const rules = question.selectionRules || {};
-                const primaryMax = Math.max(1, Number(rules.maxPrimary || 2));
-                const secondaryMax = Math.max(0, Number(rules.maxSecondary || 2));
+                const rules = normalizeSelectionRules(question.selectionRules);
+                const primaryMax = Math.max(1, Number(rules.maxPrimary ?? 2));
+                const secondaryMax = Math.max(0, Number(rules.maxSecondary ?? 2));
+                const specialMax = Math.max(0, Number(rules.maxSpecial ?? 0));
                 if (selection.primary.length < primaryMax) {
                     setError(`Please choose ${primaryMax} primary option(s) for: ${question.text}`);
                     return;
@@ -470,7 +557,12 @@ export default function TakeSurveyPage() {
                     setError(`Please choose ${secondaryMax} secondary option(s) for: ${question.text}`);
                     return;
                 }
-                const combined = [...selection.primary, ...selection.secondary];
+                if (specialMax > 0 && selection.special.length < specialMax) {
+                    setError(`Please choose ${specialMax} special option(s) for: ${question.text}`);
+                    return;
+                }
+
+                const combined = [...selection.primary, ...selection.secondary, ...selection.special];
                 if ((rules.preventDuplicate ?? true) && new Set(combined).size !== combined.length) {
                     setError(`Primary and secondary choices must be different for: ${question.text}`);
                     return;
@@ -493,6 +585,10 @@ export default function TakeSurveyPage() {
             if (!hasValue(value)) {
                 setError(`Please answer required question: ${question.text}`);
                 return;
+            }
+
+            if (questionType === "short_text" || questionType === "long_text") {
+                if (!validateText(question, value, validation)) return;
             }
 
             // Validate constraints for required fields
@@ -800,7 +896,7 @@ export default function TakeSurveyPage() {
                                                 );
                                             })()}
                                             {questionType === "multi_level_selection" && (() => {
-                                                const rules = q.selectionRules || {};
+                                                const rules = normalizeSelectionRules(q.selectionRules);
                                                 const selection = normalizeSelectionObject(answers[String(q.id)]);
                                                 const renderSelectGroup = (label, key, count) => (
                                                     <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -808,7 +904,9 @@ export default function TakeSurveyPage() {
                                                         {Array.from({ length: Math.max(1, Number(count || 0)) }, (_, index) => index).map((slotIndex) => {
                                                             const groupValues = selection[key];
                                                             const currentValue = groupValues[slotIndex] || "";
-                                                            const otherValues = [...selection.primary, ...selection.secondary].filter((_, idx) => true).filter(Boolean).filter((value) => String(value) !== String(currentValue));
+                                                            const otherValues = [...selection.primary, ...selection.secondary, ...selection.special]
+                                                                .filter(Boolean)
+                                                                .filter((value) => String(value) !== String(currentValue));
                                                             const availableOptions = getChoiceOptions(q).filter((opt) => !otherValues.includes(String(opt.value)) || String(currentValue) === String(opt.value));
                                                             return (
                                                                 <select
@@ -833,8 +931,9 @@ export default function TakeSurveyPage() {
 
                                                 return (
                                                     <div className="space-y-3">
-                                                        {renderSelectGroup("Primary", "primary", rules.maxPrimary || 2)}
-                                                        {(rules.maxSecondary || 0) > 0 && renderSelectGroup("Secondary", "secondary", rules.maxSecondary || 2)}
+                                                        {renderSelectGroup("Primary", "primary", rules.maxPrimary ?? 2)}
+                                                        {Number(rules.maxSecondary ?? 0) > 0 && renderSelectGroup("Secondary", "secondary", rules.maxSecondary ?? 2)}
+                                                        {Number(rules.maxSpecial ?? 0) > 0 && renderSelectGroup("Special", "special", rules.maxSpecial ?? 1)}
                                                     </div>
                                                 );
                                             })()}

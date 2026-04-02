@@ -585,6 +585,26 @@ const BuilderRightPanel = ({
                                     />
                                 </div>
                             </div>
+
+                            {selectedQuestion.type === "multi_level_selection" && (
+                                <div>
+                                    <label className="text-xs font-medium text-slate-500">Special max</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={selectedQuestion.selectionRules?.maxSpecial ?? ""}
+                                        onChange={(event) =>
+                                            updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
+                                                selectionRules: {
+                                                    ...(selectedQuestion.selectionRules || {}),
+                                                    maxSpecial: event.target.value === "" ? 0 : Number(event.target.value),
+                                                },
+                                            })
+                                        }
+                                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                    />
+                                </div>
+                            )}
                             <label className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700">
                                 Prevent duplicate selections
                                 <input

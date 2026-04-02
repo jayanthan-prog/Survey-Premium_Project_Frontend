@@ -22,7 +22,7 @@ const Sidebar = ({ isOpen, setIsOpen, navLinks }) => {
                 <div className="flex flex-col h-full">
                     {/* Branding & Close button for mobile */}
                     <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                        <h1 className="text-xl font-bold text-white tracking-tight">Survey Me</h1>
+                        <h1 className="text-xl font-bold text-white tracking-tight">BIT surveys</h1>
                         <button
                             className="md:hidden text-slate-400 hover:text-white p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                             onClick={() => setIsOpen(false)}
