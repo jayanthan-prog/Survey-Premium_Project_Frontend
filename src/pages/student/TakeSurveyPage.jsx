@@ -80,6 +80,60 @@ const normalizeGroups = (groups) => {
     }));
 };
 
+const normalizeChoiceOption = (option) => {
+    if (option == null) {
+        return { label: "Option", value: "option", limit: null, selectedCount: 0 };
+    }
+
+    if (typeof option === "string" || typeof option === "number") {
+        const label = String(option);
+        return { label, value: label, limit: null, selectedCount: 0 };
+    }
+
+    return {
+        label: String(option.label || option.text || option.option_text || option.value || "Option"),
+        value: String(option.value || option.option_value || option.label || option.option_text || "option"),
+        limit: option.limit == null ? null : Math.max(0, Number(option.limit) || 0),
+        selectedCount: Math.max(0, Number(option.selectedCount ?? option.selected_count ?? 0) || 0),
+    };
+};
+
+const choiceOptionLabel = (option) => {
+    const normalized = normalizeChoiceOption(option);
+    if (normalized.limit != null) {
+        const remaining = Math.max(0, Number(normalized.limit) - Number(normalized.selectedCount || 0));
+        return `${normalized.label} (${remaining} left)`;
+    }
+    return normalized.label;
+};
+
+const getChoiceOptions = (question) => (Array.isArray(question?.options) ? question.options : []).map((option) => normalizeChoiceOption(option));
+
+const isChoiceType = (value) => ["single_choice", "multiple_choice", "dropdown", "limited_dropdown", "priority_select", "multi_level_selection"].includes(normalizeQuestionType(value));
+
+const getAvailableChoiceOptions = (question, currentValues = []) => {
+    const selectedSet = new Set((Array.isArray(currentValues) ? currentValues : [currentValues]).map((value) => String(value)).filter(Boolean));
+    return getChoiceOptions(question).filter((option) => {
+        const limit = option.limit;
+        const available = limit == null || limit <= 0 || Number(option.selectedCount || 0) < Number(limit);
+        if (!available) return false;
+        if (selectedSet.has(String(option.value))) return true;
+        return true;
+    });
+};
+
+const toSelectionArray = (value) => (Array.isArray(value) ? value.map((entry) => String(entry)) : []);
+
+const normalizeSelectionObject = (value) => {
+    if (!value || typeof value !== "object") {
+        return { primary: [], secondary: [] };
+    }
+    return {
+        primary: toSelectionArray(value.primary),
+        secondary: toSelectionArray(value.secondary),
+    };
+};
+
 const normalizeSkipLogic = (logic) => {
     if (!logic || typeof logic !== "object") {
         return {
@@ -125,6 +179,7 @@ export default function TakeSurveyPage() {
     const [submitting, setSubmitting] = useState(false);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [alreadyCompleted, setAlreadyCompleted] = useState(false);
+    const isCoreMember = Boolean(user?.isCoreMember || user?.is_core_member || user?.attributes?.isCoreMember || user?.attributes?.is_core_member);
 
     const fieldClass = "w-full rounded-none border-0 border-b-2 border-slate-300 bg-transparent px-0 py-1.5 text-[13px] text-slate-800 shadow-none outline-none transition-all duration-200 focus:border-violet-600 focus:ring-0 placeholder:text-slate-400";
     const subtleFieldClass = "w-full rounded-none border-0 border-b-2 border-slate-300 bg-transparent px-0 py-1.5 text-[13px] text-slate-800 shadow-none outline-none transition-all duration-200 focus:border-violet-600 focus:ring-0 placeholder:text-slate-400";
@@ -368,6 +423,7 @@ export default function TakeSurveyPage() {
             const questionId = String(question.id);
             const questionType = normalizeQuestionType(question.type);
             const value = answers[questionId];
+            const choiceOptions = getChoiceOptions(question);
             if (!question.required) {
                 // Still validate constraints for optional fields
                 if (questionType === "number" && value != null) {
@@ -379,6 +435,49 @@ export default function TakeSurveyPage() {
                         setError(`${question.text} must be at most ${question.max}`);
                         return;
                     }
+                }
+                continue;
+            }
+
+            if (questionType === "priority_select") {
+                const selections = toSelectionArray(value);
+                const maxRank = Math.max(1, Number(question.maxRank || 3));
+                if (selections.length < maxRank) {
+                    setError(`Please rank all ${maxRank} choices for: ${question.text}`);
+                    return;
+                }
+                if (new Set(selections).size !== selections.length) {
+                    setError(`Duplicate selections are not allowed for: ${question.text}`);
+                    return;
+                }
+                if (choiceOptions.length && selections.some((entry) => !choiceOptions.some((option) => String(option.value) === String(entry)))) {
+                    setError(`One or more selections are invalid for: ${question.text}`);
+                    return;
+                }
+                continue;
+            }
+
+            if (questionType === "multi_level_selection") {
+                const selection = normalizeSelectionObject(value);
+                const rules = question.selectionRules || {};
+                const primaryMax = Math.max(1, Number(rules.maxPrimary || 2));
+                const secondaryMax = Math.max(0, Number(rules.maxSecondary || 2));
+                if (selection.primary.length < primaryMax) {
+                    setError(`Please choose ${primaryMax} primary option(s) for: ${question.text}`);
+                    return;
+                }
+                if (secondaryMax > 0 && selection.secondary.length < secondaryMax) {
+                    setError(`Please choose ${secondaryMax} secondary option(s) for: ${question.text}`);
+                    return;
+                }
+                const combined = [...selection.primary, ...selection.secondary];
+                if ((rules.preventDuplicate ?? true) && new Set(combined).size !== combined.length) {
+                    setError(`Primary and secondary choices must be different for: ${question.text}`);
+                    return;
+                }
+                if (choiceOptions.length && combined.some((entry) => !choiceOptions.some((option) => String(option.value) === String(entry)))) {
+                    setError(`One or more selections are invalid for: ${question.text}`);
+                    return;
                 }
                 continue;
             }
@@ -523,6 +622,22 @@ export default function TakeSurveyPage() {
         );
     }
 
+    if (isCoreMember) {
+        return (
+            <div className="mx-auto mt-8 max-w-3xl rounded-2xl border border-amber-200 bg-amber-50/60 p-6 shadow-sm">
+                <h1 className="text-xl font-semibold text-amber-900">Core Committee Access</h1>
+                <div className="mt-2 text-sm text-amber-700">Core members are already shortlisted and should not apply again.</div>
+                <button
+                    type="button"
+                    onClick={() => navigate("/student/surveys")}
+                    className="mt-4 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                >
+                    Back to Surveys
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 flex justify-center px-4 py-8 sm:px-6 sm:py-10">
             <div className="w-full max-w-3xl px-0 sm:px-2">
@@ -558,24 +673,24 @@ export default function TakeSurveyPage() {
                                             )}
                                             {questionType === "multiple_choice" && (
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                    {(Array.isArray(q.options) ? q.options : []).map(opt => (
-                                                        <label key={opt} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] text-slate-700 transition-all hover:border-purple-400 hover:bg-purple-50">
-                                                            <input className="h-4 w-4 rounded accent-purple-600" type="checkbox" value={opt} checked={Array.isArray(answers[String(q.id)]) && answers[String(q.id)].includes(opt)} onChange={e => {
+                                                    {getChoiceOptions(q).map(opt => (
+                                                        <label key={opt.value} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] text-slate-700 transition-all hover:border-purple-400 hover:bg-purple-50">
+                                                            <input className="h-4 w-4 rounded accent-purple-600" type="checkbox" value={opt.value} checked={Array.isArray(answers[String(q.id)]) && answers[String(q.id)].includes(opt.value)} onChange={e => {
                                                                 let arr = Array.isArray(answers[String(q.id)]) ? [...answers[String(q.id)]] : [];
-                                                                if (e.target.checked) arr.push(opt); else arr = arr.filter(o => o !== opt);
+                                                                if (e.target.checked) arr.push(opt.value); else arr = arr.filter(o => o !== opt.value);
                                                                 handleChange(q.id, arr);
                                                             }} />
-                                                            {opt}
+                                                            {choiceOptionLabel(opt)}
                                                         </label>
                                                     ))}
                                                 </div>
                                             )}
                                             {questionType === "single_choice" && (
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                    {(Array.isArray(q.options) ? q.options : []).map(opt => (
-                                                        <label key={opt} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] text-slate-700 transition-all hover:border-purple-400 hover:bg-purple-50">
-                                                            <input className="h-4 w-4 accent-purple-600" type="radio" name={`q${q.id}`} value={opt} checked={answers[String(q.id)] === opt} onChange={e => handleChange(q.id, opt)} />
-                                                            {opt}
+                                                    {getChoiceOptions(q).map(opt => (
+                                                        <label key={opt.value} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] text-slate-700 transition-all hover:border-purple-400 hover:bg-purple-50">
+                                                            <input className="h-4 w-4 accent-purple-600" type="radio" name={`q${q.id}`} value={opt.value} checked={answers[String(q.id)] === opt.value} onChange={e => handleChange(q.id, opt.value)} />
+                                                            {choiceOptionLabel(opt)}
                                                         </label>
                                                     ))}
                                                 </div>
@@ -641,7 +756,7 @@ export default function TakeSurveyPage() {
                                                     )}
                                                 </div>
                                             )}
-                                            {questionType === "dropdown" && (
+                                            {(["dropdown", "limited_dropdown"].includes(questionType)) && (
                                                 <select
                                                     className={`${fieldClass} pr-8`}
                                                     value={answers[String(q.id)] || ""}
@@ -649,11 +764,80 @@ export default function TakeSurveyPage() {
                                                     required={q.required}
                                                 >
                                                     <option value="">-- Select an option --</option>
-                                                    {(Array.isArray(q.options) ? q.options : []).map((opt) => (
-                                                        <option key={opt} value={opt}>{opt}</option>
+                                                    {getAvailableChoiceOptions(q, answers[String(q.id)]).map((opt) => (
+                                                        <option key={opt.value} value={opt.value}>{choiceOptionLabel(opt)}</option>
                                                     ))}
                                                 </select>
                                             )}
+                                            {questionType === "priority_select" && (() => {
+                                                const maxRank = Math.max(1, Number(q.maxRank || 3));
+                                                const selections = toSelectionArray(answers[String(q.id)]);
+                                                return (
+                                                    <div className="space-y-2">
+                                                        {Array.from({ length: maxRank }, (_, index) => index).map((rankIndex) => {
+                                                            const currentValue = selections[rankIndex] || "";
+                                                            const usedValues = selections.filter((_, idx) => idx !== rankIndex).map(String);
+                                                            const availableOptions = getChoiceOptions(q).filter((opt) => !usedValues.includes(String(opt.value)) || String(currentValue) === String(opt.value));
+                                                            return (
+                                                                <select
+                                                                    key={`${q.id}-rank-${rankIndex}`}
+                                                                    className={`${fieldClass} pr-8`}
+                                                                    value={currentValue}
+                                                                    onChange={(e) => {
+                                                                        const next = [...selections];
+                                                                        next[rankIndex] = e.target.value;
+                                                                        handleChange(q.id, next.filter(Boolean));
+                                                                    }}
+                                                                >
+                                                                    <option value="">Rank {rankIndex + 1}</option>
+                                                                    {availableOptions.map((opt) => (
+                                                                        <option key={opt.value} value={opt.value}>{choiceOptionLabel(opt)}</option>
+                                                                    ))}
+                                                                </select>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                );
+                                            })()}
+                                            {questionType === "multi_level_selection" && (() => {
+                                                const rules = q.selectionRules || {};
+                                                const selection = normalizeSelectionObject(answers[String(q.id)]);
+                                                const renderSelectGroup = (label, key, count) => (
+                                                    <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</div>
+                                                        {Array.from({ length: Math.max(1, Number(count || 0)) }, (_, index) => index).map((slotIndex) => {
+                                                            const groupValues = selection[key];
+                                                            const currentValue = groupValues[slotIndex] || "";
+                                                            const otherValues = [...selection.primary, ...selection.secondary].filter((_, idx) => true).filter(Boolean).filter((value) => String(value) !== String(currentValue));
+                                                            const availableOptions = getChoiceOptions(q).filter((opt) => !otherValues.includes(String(opt.value)) || String(currentValue) === String(opt.value));
+                                                            return (
+                                                                <select
+                                                                    key={`${q.id}-${key}-${slotIndex}`}
+                                                                    className={`${fieldClass} pr-8`}
+                                                                    value={currentValue}
+                                                                    onChange={(e) => {
+                                                                        const next = normalizeSelectionObject(answers[String(q.id)]);
+                                                                        next[key][slotIndex] = e.target.value;
+                                                                        handleChange(q.id, next);
+                                                                    }}
+                                                                >
+                                                                    <option value="">{label} {slotIndex + 1}</option>
+                                                                    {availableOptions.map((opt) => (
+                                                                        <option key={opt.value} value={opt.value}>{choiceOptionLabel(opt)}</option>
+                                                                    ))}
+                                                                </select>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                );
+
+                                                return (
+                                                    <div className="space-y-3">
+                                                        {renderSelectGroup("Primary", "primary", rules.maxPrimary || 2)}
+                                                        {(rules.maxSecondary || 0) > 0 && renderSelectGroup("Secondary", "secondary", rules.maxSecondary || 2)}
+                                                    </div>
+                                                );
+                                            })()}
                                             {questionType === "date" && (
                                                 <input
                                                     type="date"

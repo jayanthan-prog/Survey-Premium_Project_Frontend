@@ -6,12 +6,73 @@ export const QUESTION_TYPES = [
     { value: "single_choice", label: "Single Choice" },
     { value: "multiple_choice", label: "Multiple Choice" },
     { value: "dropdown", label: "Dropdown" },
+    { value: "limited_dropdown", label: "Limited Dropdown" },
+    { value: "priority_select", label: "Priority Select" },
+    { value: "multi_level_selection", label: "Multi-level Selection" },
     { value: "rating", label: "Rating" },
     { value: "number", label: "Number" },
     { value: "date", label: "Date" },
     { value: "file_upload", label: "File Upload" },
     { value: "matrix", label: "Matrix" },
 ];
+
+export const CHOICE_QUESTION_TYPES = new Set([
+    "single_choice",
+    "multiple_choice",
+    "dropdown",
+    "limited_dropdown",
+    "priority_select",
+    "multi_level_selection",
+]);
+
+export const createChoiceOption = (label = "Option 1", overrides = {}) => {
+    const optionLabel = String(label ?? "").trim();
+    return {
+        id: overrides.id || createId("opt"),
+        label: optionLabel,
+        value:
+            overrides.value ||
+            (optionLabel
+                ? optionLabel.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")
+                : ""),
+        limit: overrides.limit == null ? null : Math.max(0, Number(overrides.limit) || 0),
+        selectedCount: Math.max(0, Number(overrides.selectedCount) || 0),
+        meta: typeof overrides.meta === "object" && overrides.meta ? overrides.meta : {},
+    };
+};
+
+export const normalizeChoiceOption = (option, index = 0) => {
+    if (option == null) {
+        return createChoiceOption(`Option ${index + 1}`);
+    }
+
+    if (typeof option === "string" || typeof option === "number") {
+        return createChoiceOption(option, { value: String(option) });
+    }
+
+    const label = String(
+        option.label ??
+        option.text ??
+        option.option_text ??
+        option.value ??
+        ""
+    ).trim();
+    const value = String(option.value ?? option.option_value ?? label ?? "").trim();
+    const meta = typeof option.meta === "object" && option.meta ? option.meta : {};
+    const limit = option.limit == null ? meta.limit ?? meta.seatLimit ?? null : option.limit;
+    const selectedCount = option.selectedCount == null ? meta.selectedCount ?? meta.selected_count ?? 0 : option.selectedCount;
+
+    return {
+        id: option.id || option.question_option_id || createId("opt"),
+        label,
+        value,
+        limit: limit == null || limit === "" ? null : Math.max(0, Number(limit) || 0),
+        selectedCount: Math.max(0, Number(selectedCount) || 0),
+        meta,
+    };
+};
+
+export const choiceOptionLabel = (option) => normalizeChoiceOption(option).label;
 
 export const LOGIC_OPERATORS = [
     { value: "equals", label: "Equals" },
@@ -30,7 +91,14 @@ export const createId = (prefix) => {
 };
 
 export const createQuestion = (type = "short_text") => {
-    const isChoice = ["single_choice", "multiple_choice", "dropdown"].includes(type);
+    const isChoice = CHOICE_QUESTION_TYPES.has(type);
+    const isSelectionType = ["limited_dropdown", "priority_select", "multi_level_selection"].includes(type);
+
+    const selectionRules = {
+        maxPrimary: type === "priority_select" ? 3 : type === "multi_level_selection" ? 2 : 0,
+        maxSecondary: type === "multi_level_selection" ? 2 : 0,
+        preventDuplicate: isSelectionType,
+    };
 
     return {
         id: createId("q"),
@@ -39,7 +107,9 @@ export const createQuestion = (type = "short_text") => {
         type,
         required: false,
         randomizeOptions: false,
-        options: isChoice ? ["Option 1", "Option 2"] : [],
+        options: isChoice ? [createChoiceOption("Option 1"), createChoiceOption("Option 2")] : [],
+        selectionRules,
+        maxRank: type === "priority_select" ? 3 : 0,
         scaleMin: 1,
         scaleMax: 5,
         min: "",
@@ -103,10 +173,12 @@ export const normalizeQuestion = (rawQuestion) => {
     const base = createQuestion(rawQuestion?.type || "short_text");
     const question = { ...base, ...(rawQuestion || {}) };
 
-    if (!["single_choice", "multiple_choice", "dropdown"].includes(question.type)) {
+    if (!CHOICE_QUESTION_TYPES.has(question.type)) {
         question.options = [];
-    } else if (!Array.isArray(question.options) || !question.options.length) {
-        question.options = ["Option 1", "Option 2"];
+    } else {
+        question.options = Array.isArray(question.options) && question.options.length
+            ? question.options.map((option, index) => normalizeChoiceOption(option, index))
+            : [createChoiceOption("Option 1"), createChoiceOption("Option 2")];
     }
 
     if (question.type !== "matrix") {
@@ -131,6 +203,12 @@ export const normalizeQuestion = (rawQuestion) => {
         ...base.skipLogic,
         ...(rawQuestion?.skipLogic || {}),
     };
+
+    question.selectionRules = {
+        ...base.selectionRules,
+        ...(rawQuestion?.selectionRules || {}),
+    };
+    question.maxRank = Number(rawQuestion?.maxRank ?? base.maxRank ?? 0) || 0;
 
     return question;
 };

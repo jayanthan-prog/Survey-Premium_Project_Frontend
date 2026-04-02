@@ -179,7 +179,7 @@ const SurveyReportPage = () => {
                                 <div className="text-sm font-semibold text-gray-900">{question.text}</div>
                                 <div className="mt-1 text-xs text-gray-500">{question.submissionCount || 0} submissions</div>
 
-                                {(type === "single_choice" || type === "multiple_choice" || type === "dropdown") && distribution.length > 0 && (
+                                {(type === "single_choice" || type === "multiple_choice" || type === "dropdown" || type === "limited_dropdown" || type === "priority_select" || type === "multi_level_selection") && distribution.length > 0 && (
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
                                         <div className="h-60">
                                             <ResponsiveContainer width="100%" height="100%">

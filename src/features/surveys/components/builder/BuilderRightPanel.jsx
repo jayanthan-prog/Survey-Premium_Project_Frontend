@@ -1,5 +1,19 @@
 import { useMemo, useState } from "react";
 import { Plus, Settings2, Trash2, X } from "lucide-react";
+import HoverProfile from "../../../../components/profile/HoverProfile";
+import UserCard from "../../../../components/profile/UserCard";
+import { createChoiceOption } from "../../utils/builderSchema";
+
+const toOptionValue = (label, fallback = "option") => {
+    const slug = String(label || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    return slug || fallback;
+};
+
+const isDefaultOptionLabel = (label) => /^option\s*\d*$/i.test(String(label || "").trim());
 
 const BuilderRightPanel = ({
     activePanelTab,
@@ -307,17 +321,19 @@ const BuilderRightPanel = ({
                                 const user = (userOptions || []).find((entry) => String(entry.value) === String(value));
                                 const label = user ? user.label : String(value);
                                 return (
-                                    <span key={String(value)} className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">
-                                        {label}
-                                        <button
-                                            type="button"
-                                            onClick={() => removeTargetUser(value)}
-                                            className="text-emerald-700 hover:text-emerald-900"
-                                            title="Remove user"
-                                        >
-                                            <X size={12} />
-                                        </button>
-                                    </span>
+                                    <HoverProfile key={String(value)} user={user?.user}>
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700">
+                                            {label}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeTargetUser(value)}
+                                                className="text-emerald-700 hover:text-emerald-900"
+                                                title="Remove user"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </span>
+                                    </HoverProfile>
                                 );
                             })}
                             {selectedUserValues.length === 0 && (
@@ -421,7 +437,7 @@ const BuilderRightPanel = ({
                         />
                     </label>
 
-                    {["single_choice", "multiple_choice", "dropdown"].includes(selectedQuestion.type) && (
+                    {["single_choice", "multiple_choice", "dropdown", "limited_dropdown", "priority_select", "multi_level_selection"].includes(selectedQuestion.type) && (
                         <div className="space-y-2 rounded-xl border border-slate-200 p-3">
                             <div className="flex items-center justify-between">
                                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Options</div>
@@ -430,53 +446,176 @@ const BuilderRightPanel = ({
                                     className="text-xs text-sky-700 hover:underline"
                                     onClick={() =>
                                         updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
-                                            options: [...(selectedQuestion.options || []), `Option ${(selectedQuestion.options || []).length + 1}`],
+                                            options: [...(selectedQuestion.options || []), createChoiceOption("")],
                                         })
                                     }
                                 >
                                     Add Option
                                 </button>
                             </div>
-                            {(selectedQuestion.options || []).map((option, index) => (
-                                <div key={`${selectedQuestion.id}-option-${index}`} className="flex items-center gap-2">
-                                    <input
-                                        value={option}
-                                        onChange={(event) => {
-                                            const next = [...(selectedQuestion.options || [])];
-                                            next[index] = event.target.value;
-                                            updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
-                                                options: next,
-                                            });
-                                        }}
-                                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                                    />
-                                    <button
-                                        type="button"
-                                        className="rounded-md border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
-                                        onClick={() => {
-                                            const next = (selectedQuestion.options || []).filter((_, idx) => idx !== index);
-                                            updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
-                                                options: next.length ? next : ["Option 1"],
-                                            });
-                                        }}
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                </div>
-                            ))}
+                            {(selectedQuestion.options || []).map((option, index) => {
+                                const showSeatControls = ["limited_dropdown", "priority_select", "multi_level_selection"].includes(selectedQuestion.type);
+                                return (
+                                    <div key={`${selectedQuestion.id}-option-${index}`} className="grid gap-2 rounded-lg border border-slate-200 p-2">
+                                        <div className="grid min-w-0 gap-2 sm:grid-cols-1">
+                                            <input
+                                                value={option?.label ?? ""}
+                                                onChange={(event) => {
+                                                    const next = [...(selectedQuestion.options || [])];
+                                                    const previousValue = String(option?.value || "");
+                                                    const nextLabel = event.target.value;
+                                                    next[index] = {
+                                                        ...option,
+                                                        label: nextLabel,
+                                                        // Keep custom value if user previously had one; otherwise follow label slug.
+                                                        value: previousValue && previousValue !== toOptionValue(option?.label || "", `option_${index + 1}`)
+                                                            ? previousValue
+                                                            : (nextLabel ? toOptionValue(nextLabel) : ""),
+                                                    };
+                                                    updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
+                                                        options: next,
+                                                    });
+                                                }}
 
+                                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                                                placeholder="Label"
+                                            />
+                                        </div>
+                                        <div className={showSeatControls ? "grid items-center gap-2 grid-cols-[minmax(0,1fr)_auto_auto]" : "flex items-center justify-end"}>
+                                            {showSeatControls && (
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={option?.limit ?? ""}
+                                                    onChange={(event) => {
+                                                        const next = [...(selectedQuestion.options || [])];
+                                                        next[index] = {
+                                                            ...option,
+                                                            limit: event.target.value === "" ? null : Number(event.target.value),
+                                                        };
+                                                        updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
+                                                            options: next,
+                                                        });
+                                                    }}
+                                                    className="min-w-[96px] rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                                                    placeholder="Limit"
+                                                    title="Seat limit"
+                                                />
+                                            )}
+                                            {showSeatControls && (
+                                                <span className="whitespace-nowrap rounded-lg bg-slate-50 px-2 py-2 text-[11px] text-slate-500">
+                                                    {option?.selectedCount || 0} used
+                                                </span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                className="rounded-md border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
+                                                onClick={() => {
+                                                    const next = (selectedQuestion.options || []).filter((_, idx) => idx !== index);
+                                                    updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
+                                                        options: next.length ? next : [createChoiceOption("")],
+                                                    });
+                                                }}
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            <div className="grid gap-2 sm:grid-cols-2">
+                                <label className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700">
+                                    Randomize options
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(selectedQuestion.randomizeOptions)}
+                                        onChange={(event) =>
+                                            updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
+                                                randomizeOptions: event.target.checked,
+                                            })
+                                        }
+                                    />
+                                </label>
+                                {selectedQuestion.type === "limited_dropdown" && (
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                                        Hide options whose limit is 0 or already full.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {["priority_select", "multi_level_selection"].includes(selectedQuestion.type) && (
+                        <div className="space-y-3 rounded-xl border border-slate-200 p-3">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Selection Rules</div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-xs font-medium text-slate-500">Primary max</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={selectedQuestion.selectionRules?.maxPrimary ?? ""}
+                                        onChange={(event) =>
+                                            updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
+                                                selectionRules: {
+                                                    ...(selectedQuestion.selectionRules || {}),
+                                                    maxPrimary: event.target.value === "" ? 0 : Number(event.target.value),
+                                                },
+                                            })
+                                        }
+                                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-medium text-slate-500">Secondary max</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={selectedQuestion.selectionRules?.maxSecondary ?? ""}
+                                        onChange={(event) =>
+                                            updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
+                                                selectionRules: {
+                                                    ...(selectedQuestion.selectionRules || {}),
+                                                    maxSecondary: event.target.value === "" ? 0 : Number(event.target.value),
+                                                },
+                                            })
+                                        }
+                                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                    />
+                                </div>
+                            </div>
                             <label className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700">
-                                Randomize options
+                                Prevent duplicate selections
                                 <input
                                     type="checkbox"
-                                    checked={Boolean(selectedQuestion.randomizeOptions)}
+                                    checked={Boolean(selectedQuestion.selectionRules?.preventDuplicate)}
                                     onChange={(event) =>
                                         updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
-                                            randomizeOptions: event.target.checked,
+                                            selectionRules: {
+                                                ...(selectedQuestion.selectionRules || {}),
+                                                preventDuplicate: event.target.checked,
+                                            },
                                         })
                                     }
                                 />
                             </label>
+                            {selectedQuestion.type === "priority_select" && (
+                                <div>
+                                    <label className="text-xs font-medium text-slate-500">Max rank</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={selectedQuestion.maxRank || 3}
+                                        onChange={(event) =>
+                                            updateQuestion(selectedQuestionRef.pageId, selectedQuestionRef.questionId, {
+                                                maxRank: event.target.value === "" ? 0 : Number(event.target.value),
+                                            })
+                                        }
+                                        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                                    />
+                                </div>
+                            )}
                         </div>
                     )}
 

@@ -79,6 +79,11 @@ const SurveyBuilderPage = () => {
                             id: Number(user.user_id),
                             value: String(user.user_id),
                             label: `${user.name || "User"}${user.email ? ` (${user.email})` : ""}`,
+                            user: {
+                                ...user,
+                                score: user.score ?? null,
+                                attributes: user.attributes || {},
+                            },
                         }))
                 );
             } catch {

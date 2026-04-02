@@ -7,18 +7,20 @@ const BUILDER_AUTOSAVE_KEY = "surveyBuilderDraft.v2";
 
 const typeLabel = (value) => String(value || "short_text").replaceAll("_", " ");
 
+const choiceLabel = (option) => String(option?.label || option?.value || option || "Option");
+
 const renderPlaceholder = (question) => {
     if (question.type === "long_text") {
         return <div className="mt-2 h-24 rounded-lg border border-dashed border-slate-300" />;
     }
 
-    if (["single_choice", "multiple_choice", "dropdown"].includes(question.type)) {
+    if (["single_choice", "multiple_choice", "dropdown", "limited_dropdown", "priority_select", "multi_level_selection"].includes(question.type)) {
         return (
             <ul className="mt-3 space-y-2 text-sm text-slate-600">
                 {(question.options || []).map((option, index) => (
                     <li key={`${question.id}-${index}`} className="flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full bg-sky-500" />
-                        {option}
+                        {choiceLabel(option)}
                     </li>
                 ))}
             </ul>
