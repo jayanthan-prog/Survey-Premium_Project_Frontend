@@ -1,6 +1,6 @@
 import {
     LayoutDashboard, Users, UserPlus, ClipboardList, Send,
-    CheckSquare, BarChart3, Calendar, Map, Settings
+    CheckSquare, BarChart3, Calendar, Map
 } from "lucide-react";
 
 export const APPROVER_NAV_LINKS = [
@@ -13,5 +13,4 @@ export const APPROVER_NAV_LINKS = [
     { name: "Allocation", path: "/approver/allocation", icon: BarChart3 },
     { name: "Calendar", path: "/approver/calendar", icon: Calendar },
     { name: "Action Plans", path: "/approver/action-plans", icon: Map },
-    { name: "Settings", path: "/approver/settings", icon: Settings },
 ];

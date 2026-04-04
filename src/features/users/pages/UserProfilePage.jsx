@@ -154,7 +154,6 @@ const UserProfilePage = () => {
 
             const payload = {
                 name: editForm.name.trim(),
-                email: editForm.email.trim(),
                 phone: editForm.phone.trim() || null,
                 category: editForm.category.trim() || null,
                 department: editForm.department.trim() || null,
@@ -370,7 +369,7 @@ const UserProfilePage = () => {
                                     </label>
                                     <label className="space-y-1">
                                         <span className="text-xs text-slate-500">Email</span>
-                                        <input value={editForm.email} onChange={(e) => handleFieldChange("email", e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100" />
+                                        <div className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{profile.email || "-"}</div>
                                     </label>
                                     <label className="space-y-1">
                                         <span className="text-xs text-slate-500">Phone</span>

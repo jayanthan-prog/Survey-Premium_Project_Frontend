@@ -23,6 +23,20 @@ function persistSession(session) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
 }
 
+function applyThemeFromSessionUser(user) {
+    const savedTheme = String(localStorage.getItem("ui.theme") || "").toLowerCase();
+    if (savedTheme === "dark" || savedTheme === "light") {
+        document.documentElement.classList.toggle("dark", savedTheme === "dark");
+        return;
+    }
+
+    const theme = String(user?.settings?.theme || "").toLowerCase();
+    if (!theme) return;
+    const isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    localStorage.setItem("ui.theme", isDark ? "dark" : "light");
+}
+
 export const AuthProvider = ({ children }) => {
     const [session, setSession] = useState(() => readStoredSession());
     const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -47,6 +61,7 @@ export const AuthProvider = ({ children }) => {
 
                 setSession(nextSession);
                 persistSession(nextSession);
+                applyThemeFromSessionUser(nextSession.user);
             } catch (err) {
                 if (!isMounted) return;
                 setSession(null);
@@ -72,6 +87,7 @@ export const AuthProvider = ({ children }) => {
         };
         setSession(nextSession);
         persistSession(nextSession);
+        applyThemeFromSessionUser(nextSession.user);
     };
 
     const logout = async () => {
@@ -93,6 +109,7 @@ export const AuthProvider = ({ children }) => {
             if (!prev) return prev;
             const updated = { ...prev, user: nextUser };
             persistSession(updated);
+            applyThemeFromSessionUser(nextUser);
             return updated;
         });
     };

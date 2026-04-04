@@ -53,6 +53,12 @@ export const ActionPlansModule = () => {
             setLoading(true);
             setError("");
 
+            if (!canManage) {
+                setPlans([]);
+                setSurveys([]);
+                return;
+            }
+
             const [plansRes, surveysRes] = await Promise.all([
                 getActionPlans(),
                 getSurveys(),
@@ -76,7 +82,7 @@ export const ActionPlansModule = () => {
 
     useEffect(() => {
         load();
-    }, []);
+    }, [canManage]);
 
     const stats = useMemo(() => {
         const byStatus = plans.reduce((acc, plan) => {
@@ -296,7 +302,7 @@ export const ActionPlansModule = () => {
     };
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 p-3 sm:p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-semibold text-gray-800">Action Plans</h1>
@@ -389,87 +395,89 @@ export const ActionPlansModule = () => {
                 <div className="flex items-center justify-between p-4 border-b border-gray-50">
                     <h2 className="text-sm font-semibold text-gray-800">Upcoming / Active Plans</h2>
                 </div>
-                <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 text-gray-500 text-[11px] uppercase tracking-wider">
-                        <tr>
-                            <th className="px-4 py-3 font-semibold">Action</th>
-                            <th className="px-4 py-3 font-semibold">Survey</th>
-                            <th className="px-4 py-3 font-semibold">Target Date</th>
-                            <th className="px-4 py-3 font-semibold">Status</th>
-                            {canManage && <th className="px-4 py-3 font-semibold">Actions</th>}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {loading && (
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-left text-sm">
+                        <thead className="bg-gray-50 text-gray-500 text-[11px] uppercase tracking-wider">
                             <tr>
-                                <td className="px-4 py-6 text-sm text-gray-500" colSpan={canManage ? 5 : 4}>Loading action plans...</td>
+                                <th className="px-4 py-3 font-semibold">Action</th>
+                                <th className="px-4 py-3 font-semibold">Survey</th>
+                                <th className="px-4 py-3 font-semibold">Target Date</th>
+                                <th className="px-4 py-3 font-semibold">Status</th>
+                                {canManage && <th className="px-4 py-3 font-semibold">Actions</th>}
                             </tr>
-                        )}
-                        {!loading && rows.map((row) => (
-                            <tr key={row.id} className="hover:bg-gray-50">
-                                <td className="px-4 py-3 font-medium text-gray-900">{row.name}</td>
-                                <td className="px-4 py-3 text-gray-600">{row.owner}</td>
-                                <td className="px-4 py-3 text-gray-600">{row.due}</td>
-                                <td className="px-4 py-3">
-                                    <span className={`px-2 py-1 rounded-md text-[10px] font-semibold uppercase ${statusClass[row.status] || "bg-gray-100 text-gray-700"}`}>
-                                        {row.status}
-                                    </span>
-                                </td>
-                                {canManage && (
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {loading && (
+                                <tr>
+                                    <td className="px-4 py-6 text-sm text-gray-500" colSpan={canManage ? 5 : 4}>Loading action plans...</td>
+                                </tr>
+                            )}
+                            {!loading && rows.map((row) => (
+                                <tr key={row.id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-3 font-medium text-gray-900">{row.name}</td>
+                                    <td className="px-4 py-3 text-gray-600">{row.owner}</td>
+                                    <td className="px-4 py-3 text-gray-600">{row.due}</td>
                                     <td className="px-4 py-3">
-                                        <div className="flex flex-wrap gap-1.5">
-                                            <button
-                                                type="button"
-                                                onClick={() => onApprovePlan(row)}
-                                                disabled={actionBusyId === row.id || row.status === "COMPLETED"}
-                                                title="Approve"
-                                                aria-label="Approve"
-                                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
-                                            >
-                                                <Check size={14} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => onRejectPlan(row)}
-                                                disabled={actionBusyId === row.id || row.status === "DROPPED"}
-                                                title="Reject"
-                                                aria-label="Reject"
-                                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-60"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => onEditPlan(row)}
-                                                disabled={actionBusyId === row.id}
-                                                title="Edit"
-                                                aria-label="Edit"
-                                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-60"
-                                            >
-                                                <Pencil size={14} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => onDeletePlan(row)}
-                                                disabled={actionBusyId === row.id}
-                                                title="Delete"
-                                                aria-label="Delete"
-                                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
+                                        <span className={`px-2 py-1 rounded-md text-[10px] font-semibold uppercase ${statusClass[row.status] || "bg-gray-100 text-gray-700"}`}>
+                                            {row.status}
+                                        </span>
                                     </td>
-                                )}
-                            </tr>
-                        ))}
-                        {!loading && !rows.length && (
-                            <tr>
-                                <td className="px-4 py-6 text-sm text-gray-500" colSpan={canManage ? 5 : 4}>No action plans found.</td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                                    {canManage && (
+                                        <td className="px-4 py-3">
+                                            <div className="flex flex-wrap gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onApprovePlan(row)}
+                                                    disabled={actionBusyId === row.id || row.status === "COMPLETED"}
+                                                    title="Approve"
+                                                    aria-label="Approve"
+                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                                                >
+                                                    <Check size={14} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onRejectPlan(row)}
+                                                    disabled={actionBusyId === row.id || row.status === "DROPPED"}
+                                                    title="Reject"
+                                                    aria-label="Reject"
+                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onEditPlan(row)}
+                                                    disabled={actionBusyId === row.id}
+                                                    title="Edit"
+                                                    aria-label="Edit"
+                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-60"
+                                                >
+                                                    <Pencil size={14} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onDeletePlan(row)}
+                                                    disabled={actionBusyId === row.id}
+                                                    title="Delete"
+                                                    aria-label="Delete"
+                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    )}
+                                </tr>
+                            ))}
+                            {!loading && !rows.length && (
+                                <tr>
+                                    <td className="px-4 py-6 text-sm text-gray-500" colSpan={canManage ? 5 : 4}>No action plans found.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

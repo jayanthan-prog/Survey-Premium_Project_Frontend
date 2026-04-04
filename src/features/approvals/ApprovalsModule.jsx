@@ -404,7 +404,7 @@ const ApprovalsModule = ({ mode = "auto" }) => {
                 </div>
                 <div className="overflow-x-auto">
                     <div className="max-h-[420px] overflow-y-auto">
-                        <table className="min-w-full text-left text-sm">
+                        <table className="min-w-[820px] text-left text-sm md:min-w-full">
                             <thead className="bg-gray-50 text-gray-500 text-xs sticky top-0 z-10">
                                 <tr>
                                     <th className="px-6 py-3 font-semibold">ID</th>

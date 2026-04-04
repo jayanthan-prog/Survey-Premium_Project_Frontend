@@ -124,14 +124,14 @@ const AllocationModule = () => {
             {error && <div className="text-sm text-red-600">{error}</div>}
 
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="px-4 py-4 border-b border-gray-100 flex flex-col gap-3 md:px-6 md:flex-row md:items-center md:justify-between">
                     <h2 className="font-semibold text-gray-800">{canManageAllocation ? "All Allocations" : "My Allocations"}</h2>
                     <div className="flex flex-wrap gap-2">
                         <input
                             value={searchTerm}
                             onChange={(event) => setSearchTerm(event.target.value)}
                             placeholder="Search allocations..."
-                            className="w-60 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none"
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 shadow-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-100 outline-none sm:w-60"
                         />
                         <select
                             value={statusFilter}
@@ -147,7 +147,7 @@ const AllocationModule = () => {
                     </div>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full text-left text-sm">
+                    <table className="min-w-[860px] text-left text-sm md:min-w-full">
                         <thead className="bg-gray-50 text-gray-500 text-xs">
                             <tr>
                                 <th className="px-6 py-3 font-semibold">Allocation</th>

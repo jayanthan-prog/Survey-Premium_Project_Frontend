@@ -129,7 +129,6 @@ const UsersModule = () => {
         setEditingId(row.user_id);
         setEditDraft({
             name: row.name || "",
-            email: row.email || "",
             category: row.category || "",
             year: row.year || "",
             is_active: Boolean(row.is_active),
@@ -140,7 +139,6 @@ const UsersModule = () => {
         try {
             await updateUser(token, userId, {
                 name: editDraft.name,
-                email: editDraft.email,
                 category: editDraft.category || null,
                 year: editDraft.year === "" ? null : Number(editDraft.year),
                 is_active: Boolean(editDraft.is_active),
@@ -184,9 +182,9 @@ const UsersModule = () => {
     return (
         <>
             <div className="space-y-6">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                     <h2 className="text-xl font-bold text-gray-800">User Management</h2>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <ExcelImporter onImport={handleImport} />
                         <button
                             onClick={() => navigate(`${roleBasePath}/users/create`)}
@@ -212,8 +210,8 @@ const UsersModule = () => {
 
                 {/* Users Table + Pagination */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden  flex flex-col">
-                    <div className="flex-1 overflow-auto">
-                        <table className="w-full text-left">
+                    <div className="flex-1 overflow-x-auto">
+                        <table className="w-full min-w-[760px] text-left">
                             <thead className="bg-gray-50 border-b sticky top-0 z-10">
                                 <tr>
                                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">User</th>
@@ -238,7 +236,7 @@ const UsersModule = () => {
                                             {editingId === user.user_id ? (
                                                 <div className="space-y-2">
                                                     <input className="w-full border rounded px-2 py-1 text-sm" value={editDraft.name || ""} onClick={(event) => event.stopPropagation()} onChange={(e) => setEditDraft((prev) => ({ ...prev, name: e.target.value }))} />
-                                                    <input className="w-full border rounded px-2 py-1 text-xs" value={editDraft.email || ""} onClick={(event) => event.stopPropagation()} onChange={(e) => setEditDraft((prev) => ({ ...prev, email: e.target.value }))} />
+                                                    <div className="w-full rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-600">{user.email}</div>
                                                 </div>
                                             ) : (
                                                 <>

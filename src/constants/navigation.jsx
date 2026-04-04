@@ -1,7 +1,7 @@
 import {
     LayoutDashboard, Users, UserPlus, ClipboardList, Send,
     CheckSquare, FileText, BarChart3, Calendar, Map,
-    PieChart, History, Settings
+    PieChart, History
 } from "lucide-react";
 
 export const ADMIN_NAV_LINKS = [
@@ -17,5 +17,4 @@ export const ADMIN_NAV_LINKS = [
     { name: "Action Plans", path: "/admin/action-plans", icon: Map },
     { name: "Analytics", path: "/admin/analytics", icon: PieChart },
     { name: "Audit Logs", path: "/admin/audit-logs", icon: History },
-    { name: "Settings", path: "/admin/settings", icon: Settings },
 ];

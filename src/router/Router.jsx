@@ -13,6 +13,7 @@ import { AdminDashboard } from "../pages/admin/AdminDashboard";
 import UsersModule from "../features/users/UsersModule";
 import AddUserPage from "../features/users/pages/AddUserPage";
 import UserProfilePage from "../features/users/pages/UserProfilePage";
+import MyProfilePage from "../features/users/pages/MyProfilePage";
 import GroupsModule from "../features/groups/GroupsModule";
 import SurveysModule from "../features/surveys/SurveysModule";
 import SurveyBuilderPage from "../features/surveys/pages/SurveyBuilderPage";
@@ -29,7 +30,6 @@ import AllocationAddPage from "../features/allocation/pages/AllocationAddPage";
 import { ActionPlansModule } from "../features/action-plans/ActionPlansModule";
 import AnalyticsModule from "../features/analytics/AnalyticsModule";
 import AuditLogsModule from "../features/audit-logs/AuditLogsModule";
-import SettingsModule from "../features/settings/SettingsModule";
 
 // --- STUDENT PAGES (Based on SRS Page 7/8 - Section 13) ---
 import { StudentDashboard } from "../pages/student/StudentDashboard";
@@ -73,6 +73,7 @@ const router = createBrowserRouter([
             { path: "users", element: <UsersModule /> },
             { path: "users/create", element: <AddUserPage /> },
             { path: "users/:id", element: <UserProfilePage /> },
+            { path: "profile", element: <MyProfilePage /> },
             { path: "groups", element: <GroupsModule /> },
             { path: "groups/create", element: <GroupBuilderPage /> },
             { path: "groups/:id/edit", element: <GroupBuilderPage /> },
@@ -93,7 +94,6 @@ const router = createBrowserRouter([
             { path: "action-plans", element: <ActionPlansModule /> },
             { path: "analytics", element: <AnalyticsModule /> },
             { path: "audit-logs", element: <AuditLogsModule /> },
-            { path: "settings", element: <SettingsModule /> },
         ],
     },
 
@@ -112,11 +112,11 @@ const router = createBrowserRouter([
             { path: "dashboard", element: <StudentDashboard /> },
             { path: "surveys", element: <StudentSurveysPage /> },
             { path: "surveys/:id", element: <TakeSurveyPage /> },
+            { path: "profile", element: <MyProfilePage /> },
             // { path: "approvals", element: <StudentApprovalsPage /> },
             { path: "allocation", element: <AllocationModule /> },
             { path: "calendar", element: <CalendarModule /> },
             { path: "action-plans", element: <ActionPlansModule /> },
-            { path: "settings", element: <SettingsModule /> },
         ],
     },
 
@@ -136,6 +136,7 @@ const router = createBrowserRouter([
             { path: "users", element: <UsersModule /> },
             { path: "users/create", element: <AddUserPage /> },
             { path: "users/:id", element: <UserProfilePage /> },
+            { path: "profile", element: <MyProfilePage /> },
             { path: "groups", element: <GroupsModule /> },
             { path: "groups/create", element: <GroupBuilderPage /> },
             { path: "groups/:id/edit", element: <GroupBuilderPage /> },
@@ -151,7 +152,6 @@ const router = createBrowserRouter([
             { path: "allocation/create", element: <AllocationAddPage /> },
             { path: "calendar", element: <CalendarModule /> },
             { path: "action-plans", element: <ActionPlansModule /> },
-            { path: "settings", element: <SettingsModule /> },
             // Note: Analytics and Audit Logs are intentionally omitted for approver
         ],
     },

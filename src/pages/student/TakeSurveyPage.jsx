@@ -2,10 +2,39 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { FileUp, Paperclip, Star, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import HoverProfile from "../../components/profile/HoverProfile";
 import { getSurveyById, getSurveyParticipants, submitSurvey } from "../../services/surveyApi";
 
 const normalizeQuestionType = (value) => String(value || "").trim().toLowerCase().replace(/[-\s]+/g, "_");
 const normalizeTextKey = (value) => String(value || "").trim().toLowerCase();
+
+const parseDateValue = (value) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const isSurveyClosedForUser = (survey, isCompleted) => {
+    if (!survey || isCompleted) return false;
+
+    const surveyStatus = String(survey?.status || "").toUpperCase();
+    if (surveyStatus !== "PUBLISHED") return true;
+
+    const releases = Array.isArray(survey?.releases) ? survey.releases : [];
+    const latestRelease = releases.length ? releases[0] : null;
+
+    if (!latestRelease) {
+        return true;
+    }
+
+    const isFrozen = Boolean(latestRelease?.is_frozen || latestRelease?.isFrozen);
+    if (isFrozen) return true;
+
+    const closesAt = parseDateValue(latestRelease?.closes_at || latestRelease?.closesAt);
+    if (closesAt && closesAt.getTime() <= Date.now()) return true;
+
+    return false;
+};
 
 const normalizeDisplayLogic = (logic) => {
     if (!logic || typeof logic !== "object") {
@@ -95,6 +124,7 @@ const normalizeChoiceOption = (option) => {
         value: String(option.value || option.option_value || option.label || option.option_text || "option"),
         limit: option.limit == null ? null : Math.max(0, Number(option.limit) || 0),
         selectedCount: Math.max(0, Number(option.selectedCount ?? option.selected_count ?? 0) || 0),
+        meta: option.meta && typeof option.meta === "object" ? option.meta : {},
     };
 };
 
@@ -123,6 +153,31 @@ const getAvailableChoiceOptions = (question, currentValues = []) => {
 };
 
 const toSelectionArray = (value) => (Array.isArray(value) ? value.map((entry) => String(entry)) : []);
+
+const isImportedUserChoiceOption = (option) => {
+    const meta = option?.meta && typeof option.meta === "object" ? option.meta : {};
+    const metaSource = String(meta?.source || "").toLowerCase() === "imported_user";
+    const valuePattern = /^user_\d+$/i.test(String(option?.value || ""));
+    return metaSource || valuePattern;
+};
+
+const toImportedUserForHover = (option) => {
+    const normalized = normalizeChoiceOption(option);
+    const meta = normalized.meta || {};
+    const fallbackIdMatch = String(normalized.value || "").match(/^user_(\d+)$/i);
+    const fallbackUserId = fallbackIdMatch ? Number(fallbackIdMatch[1]) : null;
+    return {
+        user_id: meta.user_id || fallbackUserId,
+        name: normalized.label,
+        email: meta.email || "",
+        department: meta.department || "",
+        category: meta.gender || "",
+        attributes: {
+            department: meta.department || "",
+            gender: meta.gender || "",
+        },
+    };
+};
 
 const normalizeSelectionObject = (value) => {
     if (!value || typeof value !== "object") {
@@ -234,8 +289,8 @@ export default function TakeSurveyPage() {
     const [alreadyCompleted, setAlreadyCompleted] = useState(false);
     const isCoreMember = Boolean(user?.isCoreMember || user?.is_core_member || user?.attributes?.isCoreMember || user?.attributes?.is_core_member);
 
-    const fieldClass = "w-full rounded-none border-0 border-b-2 border-slate-300 bg-transparent px-0 py-1.5 text-[13px] text-slate-800 shadow-none outline-none transition-all duration-200 focus:border-violet-600 focus:ring-0 placeholder:text-slate-400";
-    const subtleFieldClass = "w-full rounded-none border-0 border-b-2 border-slate-300 bg-transparent px-0 py-1.5 text-[13px] text-slate-800 shadow-none outline-none transition-all duration-200 focus:border-violet-600 focus:ring-0 placeholder:text-slate-400";
+    const fieldClass = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-100 placeholder:text-slate-400";
+    const subtleFieldClass = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-100 placeholder:text-slate-400";
 
     const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -452,7 +507,15 @@ export default function TakeSurveyPage() {
                 }
             );
         });
-    }, [currentPageIndex, visibleQuestions]);
+    }, [currentPageIndex]);
+
+    useEffect(() => {
+        if (alreadyCompleted && !submitted) {
+            navigate("/student/surveys", { replace: true });
+        }
+    }, [alreadyCompleted, submitted, navigate]);
+
+    const surveyClosed = useMemo(() => isSurveyClosedForUser(survey, alreadyCompleted), [survey, alreadyCompleted]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -669,13 +732,12 @@ export default function TakeSurveyPage() {
 
             await submitSurvey(id, { answers: filteredAnswers, otp: config.otpRequired ? otp : undefined });
             setSubmitted(true);
-            setAlreadyCompleted(true);
-            setTimeout(() => navigate("/student/surveys"), 1200);
+            setTimeout(() => navigate("/student/surveys", { replace: true }), 1200);
         } catch (err) {
             const message = err?.message || "Failed to submit survey.";
             setError(message);
             if (String(message).toLowerCase().includes("already") || err?.status === 409) {
-                setAlreadyCompleted(true);
+                navigate("/student/surveys", { replace: true });
             }
         } finally {
             setSubmitting(false);
@@ -702,18 +764,12 @@ export default function TakeSurveyPage() {
         );
     }
 
-    if (alreadyCompleted) {
+    if (submitted) {
         return (
-            <div className="mx-auto mt-8 max-w-3xl rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 shadow-sm">
-                <h1 className="text-xl font-semibold text-emerald-900">Survey Completed</h1>
-                <div className="mt-2 text-sm text-emerald-700">You have completed this survey already.</div>
-                <button
-                    type="button"
-                    onClick={() => navigate("/student/surveys")}
-                    className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                >
-                    Back to Surveys
-                </button>
+            <div className="mx-auto mt-12 flex max-w-3xl flex-col items-center rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-sm">
+                <img src="/successimage.gif" alt="Survey submitted successfully" className="h-48 w-48 object-contain" />
+                <h1 className="mt-4 text-xl font-semibold text-emerald-900">Survey submitted successfully</h1>
+                <p className="mt-2 text-sm text-emerald-700">Redirecting to surveys...</p>
             </div>
         );
     }
@@ -734,29 +790,50 @@ export default function TakeSurveyPage() {
         );
     }
 
+    if (surveyClosed) {
+        return (
+            <div className="mx-auto mt-8 max-w-3xl rounded-2xl border border-slate-300 bg-slate-50 p-6 shadow-sm">
+                <h1 className="text-xl font-semibold text-slate-900">Survey Closed</h1>
+                <div className="mt-2 text-sm text-slate-700">This survey is no longer accepting responses.</div>
+                <button
+                    type="button"
+                    onClick={() => navigate("/student/surveys")}
+                    className="mt-4 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900"
+                >
+                    Back to Surveys
+                </button>
+            </div>
+        );
+    }
+
     return (
-        <div className="min-h-screen bg-gray-50 flex justify-center px-4 py-8 sm:px-6 sm:py-10">
-            <div className="w-full max-w-3xl px-0 sm:px-2">
-                <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                    <div className="h-1.5 w-full bg-slate-200">
-                        <div className="h-full bg-violet-600 transition-all duration-300" style={{ width: `${progressPercent}%` }} />
+        <div className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6 sm:py-10">
+            <div className="mx-auto w-full max-w-6xl">
+                <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                        <div className="text-xs font-semibold text-slate-600">Step {currentPageIndex + 1} of {Math.max(1, pages.length)}</div>
+                        <div className="flex items-center gap-3">
+                            {Array.from({ length: Math.max(1, pages.length) }, (_, idx) => (
+                                <span
+                                    key={`step-dot-${idx}`}
+                                    className={`h-1.5 w-5 rounded-full ${idx <= currentPageIndex ? "bg-violet-500" : "bg-slate-300"}`}
+                                />
+                            ))}
+                        </div>
                     </div>
-                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5 text-[12px] text-slate-500">
-                        <span className="font-medium text-slate-700 truncate">{survey?.title || 'Survey'}</span>
-                        <span>{answeredCount} / {totalQuestions}</span>
-                    </div>
-                    <div className="px-3 py-3 sm:px-4 sm:py-4">
+
+
+                    <div className="px-5 py-5 sm:px-6 sm:py-6">
                         {visibleQuestions.map((q, index) => (
-                            <div key={q.id} data-question-card="true" className="mb-4 space-y-3 rounded-lg border border-slate-200 border-t-[3px] border-t-violet-500 bg-white p-4 transition-all duration-200 hover:shadow-sm">
+                            <div key={q.id} data-question-card="true" className="mb-5 space-y-2">
                                 {(() => {
                                     const questionType = normalizeQuestionType(q.type);
 
                                     return (
                                         <>
-                                            <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">{index + 1}. {q.text}</label>
-                                            {q.required && <span className="inline-block ml-1 text-xs bg-red-100 text-red-500 px-2 py-1 rounded-full">Required</span>}
+                                            <label className="block text-sm font-semibold text-slate-700">{q.text}</label>
                                             {questionType === "short_text" && (
-                                                <input className={fieldClass} value={answers[String(q.id)] || ""} onChange={e => handleChange(q.id, e.target.value)} required={q.required} />
+                                                <input className={fieldClass} value={answers[String(q.id)] || ""} onChange={e => handleChange(q.id, e.target.value)} required={q.required} placeholder={q.placeholder || "Type here"} />
                                             )}
                                             {questionType === "long_text" && (
                                                 <textarea
@@ -765,32 +842,91 @@ export default function TakeSurveyPage() {
                                                     value={answers[String(q.id)] || ""}
                                                     onChange={(e) => handleChange(q.id, e.target.value)}
                                                     required={q.required}
+                                                    placeholder={q.placeholder || "Type here"}
                                                 />
                                             )}
-                                            {questionType === "multiple_choice" && (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                    {getChoiceOptions(q).map(opt => (
-                                                        <label key={opt.value} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] text-slate-700 transition-all hover:border-purple-400 hover:bg-purple-50">
-                                                            <input className="h-4 w-4 rounded accent-purple-600" type="checkbox" value={opt.value} checked={Array.isArray(answers[String(q.id)]) && answers[String(q.id)].includes(opt.value)} onChange={e => {
-                                                                let arr = Array.isArray(answers[String(q.id)]) ? [...answers[String(q.id)]] : [];
-                                                                if (e.target.checked) arr.push(opt.value); else arr = arr.filter(o => o !== opt.value);
-                                                                handleChange(q.id, arr);
-                                                            }} />
-                                                            {choiceOptionLabel(opt)}
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            {questionType === "single_choice" && (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                    {getChoiceOptions(q).map(opt => (
-                                                        <label key={opt.value} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[13px] text-slate-700 transition-all hover:border-purple-400 hover:bg-purple-50">
-                                                            <input className="h-4 w-4 accent-purple-600" type="radio" name={`q${q.id}`} value={opt.value} checked={answers[String(q.id)] === opt.value} onChange={e => handleChange(q.id, opt.value)} />
-                                                            {choiceOptionLabel(opt)}
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                            )}
+                                            {questionType === "multiple_choice" && (() => {
+                                                const availableOptions = getChoiceOptions(q);
+                                                const hasImportedUsers = availableOptions.some((opt) => isImportedUserChoiceOption(opt));
+                                                return (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                        {availableOptions.map((opt) => {
+                                                            const selected = Array.isArray(answers[String(q.id)]) && answers[String(q.id)].includes(opt.value);
+                                                            const hoverUser = isImportedUserChoiceOption(opt) ? toImportedUserForHover(opt) : null;
+                                                            return (
+                                                                <label
+                                                                    key={opt.value}
+                                                                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[13px] transition-all ${selected
+                                                                        ? "border-violet-400 bg-violet-50 text-violet-800"
+                                                                        : "border-gray-200 bg-white text-slate-700 hover:border-purple-400 hover:bg-purple-50"
+                                                                        }`}
+                                                                >
+                                                                    <input
+                                                                        className="h-4 w-4 rounded accent-purple-600"
+                                                                        type="checkbox"
+                                                                        value={opt.value}
+                                                                        checked={selected}
+                                                                        onChange={(e) => {
+                                                                            let arr = Array.isArray(answers[String(q.id)]) ? [...answers[String(q.id)]] : [];
+                                                                            if (e.target.checked) arr.push(opt.value);
+                                                                            else arr = arr.filter((o) => o !== opt.value);
+                                                                            handleChange(q.id, arr);
+                                                                        }}
+                                                                    />
+                                                                    {hasImportedUsers && hoverUser ? (
+                                                                        <HoverProfile user={hoverUser}>
+                                                                            <span className="underline decoration-dotted underline-offset-2">
+                                                                                {choiceOptionLabel(opt)}
+                                                                            </span>
+                                                                        </HoverProfile>
+                                                                    ) : (
+                                                                        <span>{choiceOptionLabel(opt)}</span>
+                                                                    )}
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                );
+                                            })()}
+                                            {questionType === "single_choice" && (() => {
+                                                const availableOptions = getChoiceOptions(q);
+                                                const hasImportedUsers = availableOptions.some((opt) => isImportedUserChoiceOption(opt));
+                                                return (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                        {availableOptions.map((opt) => {
+                                                            const selected = answers[String(q.id)] === opt.value;
+                                                            const hoverUser = isImportedUserChoiceOption(opt) ? toImportedUserForHover(opt) : null;
+                                                            return (
+                                                                <label
+                                                                    key={opt.value}
+                                                                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[13px] transition-all ${selected
+                                                                        ? "border-violet-400 bg-violet-50 text-violet-800"
+                                                                        : "border-gray-200 bg-white text-slate-700 hover:border-purple-400 hover:bg-purple-50"
+                                                                        }`}
+                                                                >
+                                                                    <input
+                                                                        className="h-4 w-4 accent-purple-600"
+                                                                        type="radio"
+                                                                        name={`q${q.id}`}
+                                                                        value={opt.value}
+                                                                        checked={selected}
+                                                                        onChange={() => handleChange(q.id, opt.value)}
+                                                                    />
+                                                                    {hasImportedUsers && hoverUser ? (
+                                                                        <HoverProfile user={hoverUser}>
+                                                                            <span className="underline decoration-dotted underline-offset-2">
+                                                                                {choiceOptionLabel(opt)}
+                                                                            </span>
+                                                                        </HoverProfile>
+                                                                    ) : (
+                                                                        <span>{choiceOptionLabel(opt)}</span>
+                                                                    )}
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                );
+                                            })()}
                                             {questionType === "rating" && (
                                                 <div className="flex items-center gap-2 mt-3">
                                                     {Array.from({ length: Math.max(1, q.scaleMax || 5) }, (_, i) => i + 1).map((n) => (
@@ -852,19 +988,63 @@ export default function TakeSurveyPage() {
                                                     )}
                                                 </div>
                                             )}
-                                            {(["dropdown", "limited_dropdown"].includes(questionType)) && (
-                                                <select
-                                                    className={`${fieldClass} pr-8`}
-                                                    value={answers[String(q.id)] || ""}
-                                                    onChange={(e) => handleChange(q.id, e.target.value)}
-                                                    required={q.required}
-                                                >
-                                                    <option value="">-- Select an option --</option>
-                                                    {getAvailableChoiceOptions(q, answers[String(q.id)]).map((opt) => (
-                                                        <option key={opt.value} value={opt.value}>{choiceOptionLabel(opt)}</option>
-                                                    ))}
-                                                </select>
-                                            )}
+                                            {(["dropdown", "limited_dropdown"].includes(questionType)) && (() => {
+                                                const availableOptions = getAvailableChoiceOptions(q, answers[String(q.id)]);
+                                                const hasImportedUsers = availableOptions.some((opt) => isImportedUserChoiceOption(opt));
+
+                                                if (hasImportedUsers) {
+                                                    return (
+                                                        <div className="space-y-2">
+                                                            {availableOptions.map((opt) => {
+                                                                const selected = String(answers[String(q.id)] || "") === String(opt.value);
+                                                                const hoverUser = isImportedUserChoiceOption(opt) ? toImportedUserForHover(opt) : null;
+                                                                return (
+                                                                    <label
+                                                                        key={opt.value}
+                                                                        className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-[13px] transition-all ${selected
+                                                                            ? "border-violet-400 bg-violet-50 text-violet-800"
+                                                                            : "border-gray-200 bg-white text-slate-700 hover:border-purple-400 hover:bg-purple-50"
+                                                                            }`}
+                                                                    >
+                                                                        <input
+                                                                            className="h-4 w-4 accent-purple-600"
+                                                                            type="radio"
+                                                                            name={`q${q.id}`}
+                                                                            value={opt.value}
+                                                                            checked={selected}
+                                                                            onChange={() => handleChange(q.id, opt.value)}
+                                                                            required={q.required && !answers[String(q.id)]}
+                                                                        />
+                                                                        {hoverUser ? (
+                                                                            <HoverProfile user={hoverUser}>
+                                                                                <span className="underline decoration-dotted underline-offset-2">
+                                                                                    {choiceOptionLabel(opt)}
+                                                                                </span>
+                                                                            </HoverProfile>
+                                                                        ) : (
+                                                                            <span>{choiceOptionLabel(opt)}</span>
+                                                                        )}
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <select
+                                                        className={`${fieldClass} pr-8`}
+                                                        value={answers[String(q.id)] || ""}
+                                                        onChange={(e) => handleChange(q.id, e.target.value)}
+                                                        required={q.required}
+                                                    >
+                                                        <option value="">-- Select an option --</option>
+                                                        {availableOptions.map((opt) => (
+                                                            <option key={opt.value} value={opt.value}>{choiceOptionLabel(opt)}</option>
+                                                        ))}
+                                                    </select>
+                                                );
+                                            })()}
                                             {questionType === "priority_select" && (() => {
                                                 const maxRank = Math.max(1, Number(q.maxRank || 3));
                                                 const selections = toSelectionArray(answers[String(q.id)]);
@@ -1137,7 +1317,6 @@ export default function TakeSurveyPage() {
                             {currentPageIndex < pages.length - 1 && <button type="button" onClick={goToNextPage} disabled={submitting} className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">Next</button>}
                             {currentPageIndex === pages.length - 1 && <button disabled={submitting} type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-lg mt-4 disabled:opacity-60">{submitting ? "Submitting..." : "Submit Survey"}</button>}
                         </div>
-                        {submitted && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700">Survey submitted! Redirecting...</div>}
                     </div>
                 </form>
             </div>

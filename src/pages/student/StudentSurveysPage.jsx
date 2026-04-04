@@ -6,6 +6,25 @@ import { getSurveyParticipants, getSurveys } from "../../services/surveyApi";
 
 const DEFAULT_SURVEY_IMAGE = "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80";
 
+function parseDateValue(value) {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isSurveyClosed(survey) {
+    const status = String(survey?.status || "").toUpperCase();
+    if (status !== "PUBLISHED") return true;
+
+    const frozen = Boolean(survey?.latest_release_is_frozen);
+    if (frozen) return true;
+
+    const closesAt = parseDateValue(survey?.latest_release_closes_at || survey?.deadline || survey?.closes_at || survey?.due_at || survey?.end_date);
+    if (closesAt && closesAt.getTime() <= Date.now()) return true;
+
+    return false;
+}
+
 function formatDeadline(value) {
     const date = value ? new Date(value) : null;
     if (!date || Number.isNaN(date.getTime())) return "May 30, 2024";
@@ -86,6 +105,7 @@ export default function StudentSurveysPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                 {filtered.map((survey) => {
                     const isCompleted = completedSurveyIds.has(Number(survey.survey_id));
+                    const closed = isSurveyClosed(survey);
                     const createdBy = survey?.created_by_name || survey?.created_by || "Sarah Johnson";
                     const deadline = formatDeadline(survey?.deadline || survey?.closes_at || survey?.due_at || survey?.end_date);
 
@@ -108,6 +128,11 @@ export default function StudentSurveysPage() {
                                     <h3 className="text-base font-bold leading-snug text-slate-700 line-clamp-2">
                                         {survey.title || "Customer Satisfaction Survey"}
                                     </h3>
+                                    {!isCompleted && closed && (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 whitespace-nowrap">
+                                            Survey Closed
+                                        </span>
+                                    )}
                                     {isCompleted && (
                                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-700 whitespace-nowrap">
                                             <CheckCircle2 size={12} /> Completed
@@ -130,16 +155,18 @@ export default function StudentSurveysPage() {
                                     <button
                                         className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${isCompleted
                                             ? "bg-emerald-50 text-emerald-700 cursor-not-allowed"
-                                            : "bg-gradient-to-r from-violet-600 to-purple-500 hover:from-violet-700 hover:to-purple-600 text-white shadow-sm"
+                                            : closed
+                                                ? "bg-slate-200 text-slate-700 cursor-not-allowed"
+                                                : "bg-gradient-to-r from-violet-600 to-purple-500 hover:from-violet-700 hover:to-purple-600 text-white shadow-sm"
                                             }`}
                                         onClick={() => {
-                                            if (isCompleted) return;
+                                            if (isCompleted || closed) return;
                                             navigate(`/student/surveys/${survey.survey_id}`);
                                         }}
-                                        disabled={isCompleted}
+                                        disabled={isCompleted || closed}
                                     >
-                                        {isCompleted ? "You have completed this survey" : "Take Survey"}
-                                        {!isCompleted && <ArrowRight size={15} />}
+                                        {isCompleted ? "You have completed this survey" : closed ? "Survey Closed" : "Take Survey"}
+                                        {!isCompleted && !closed && <ArrowRight size={15} />}
                                     </button>
                                 </div>
                             </div>

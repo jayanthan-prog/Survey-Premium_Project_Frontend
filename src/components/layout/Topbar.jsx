@@ -11,11 +11,11 @@ import {
 
 const Topbar = ({ setIsOpen }) => {
     const { user } = useAuth();
-    const settingsPath = useMemo(() => {
+    const profilePath = useMemo(() => {
         const homePath = getHomePathByRole(user?.role);
-        if (homePath.startsWith("/admin")) return "/admin/settings";
-        if (homePath.startsWith("/approver")) return "/approver/settings";
-        return "/student/settings";
+        if (homePath.startsWith("/admin")) return "/admin/profile";
+        if (homePath.startsWith("/approver")) return "/approver/profile";
+        return "/student/profile";
     }, [user]);
 
     const navigate = useNavigate();
@@ -146,6 +146,7 @@ const Topbar = ({ setIsOpen }) => {
                         const next = !isDark;
                         const root = document.documentElement;
                         root.classList.toggle("dark", next);
+                        localStorage.setItem("ui.theme", next ? "dark" : "light");
                         setIsDark(next);
                     }}
                     className="h-10 w-10 rounded-xl text-gray-600 hover:bg-slate-100 hover:text-gray-800 transition-colors flex items-center justify-center"
@@ -180,10 +181,10 @@ const Topbar = ({ setIsOpen }) => {
                 </button>
 
                 <button
-                    onClick={() => navigate(settingsPath)}
+                    onClick={() => navigate(profilePath)}
                     className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 text-white text-xs font-bold shadow-sm"
-                    aria-label="Open profile settings"
-                    title="Open Settings"
+                    aria-label="Open profile"
+                    title="Open profile"
                 >
                     {initials}
                 </button>

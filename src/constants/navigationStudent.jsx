@@ -1,5 +1,5 @@
 import {
-    LayoutDashboard, ClipboardList, CheckSquare, BarChart3, Calendar, Map, Settings
+    LayoutDashboard, ClipboardList, CheckSquare, BarChart3, Calendar, Map
 } from "lucide-react";
 
 export const STUDENT_NAV_LINKS = [
@@ -9,5 +9,4 @@ export const STUDENT_NAV_LINKS = [
     { name: "Allocation", path: "/student/allocation", icon: BarChart3 },
     { name: "Calendar", path: "/student/calendar", icon: Calendar },
     { name: "Action Plans", path: "/student/action-plans", icon: Map },
-    { name: "Settings", path: "/student/settings", icon: Settings },
 ];

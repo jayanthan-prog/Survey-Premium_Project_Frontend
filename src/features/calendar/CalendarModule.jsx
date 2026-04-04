@@ -54,6 +54,8 @@ const CalendarModule = () => {
     const [reminderForm, setReminderForm] = useState({
         title: "",
         date: new Date().toISOString().slice(0, 10),
+        startTime: "",
+        endTime: "",
         notes: "",
     });
 
@@ -89,9 +91,12 @@ const CalendarModule = () => {
                 setLoading(true);
                 setError("");
 
+                const isManageRole = ["ADMIN", "APPROVER"].includes(normalizedRole);
+                const canViewApprovalFeed = ["ADMIN", "APPROVER"].includes(normalizedRole);
+
                 const [releasesResult, approvalsResult, allocationsResult] = await Promise.allSettled([
-                    getSurveyReleases(),
-                    Promise.all([getApprovalWorkflows(), getApprovalItems()]),
+                    isManageRole ? getSurveyReleases() : Promise.resolve([]),
+                    canViewApprovalFeed ? Promise.all([getApprovalWorkflows(), getApprovalItems()]) : Promise.resolve([[], []]),
                     getAllocations(),
                 ]);
 
@@ -260,8 +265,25 @@ const CalendarModule = () => {
         const dateValue = String(reminderForm.date || "").trim();
         if (!title || !dateValue) return;
 
-        const start = `${dateValue}T09:00:00`;
-        const end = `${dateValue}T09:30:00`;
+        const startTime = String(reminderForm.startTime || "").trim();
+        const endTime = String(reminderForm.endTime || "").trim();
+        const hasExplicitTime = Boolean(startTime);
+
+        let start = `${dateValue}T00:00:00`;
+        let end = `${dateValue}T23:59:59`;
+
+        if (hasExplicitTime) {
+            start = `${dateValue}T${startTime}:00`;
+            if (endTime) {
+                const nextEnd = new Date(`${dateValue}T${endTime}:00`);
+                const nextStart = new Date(start);
+                end = nextEnd.getTime() > nextStart.getTime()
+                    ? `${dateValue}T${endTime}:00`
+                    : new Date(nextStart.getTime() + DEFAULT_EVENT_DURATION_MS).toISOString();
+            } else {
+                end = new Date(new Date(start).getTime() + DEFAULT_EVENT_DURATION_MS).toISOString();
+            }
+        }
 
         const newReminder = {
             id: `reminder-${Date.now()}`,
@@ -270,13 +292,15 @@ const CalendarModule = () => {
             start: new Date(start).toISOString(),
             end: new Date(end).toISOString(),
             location: reminderForm.notes ? `Note: ${reminderForm.notes}` : "Personal Reminder",
-            allDay: true,
+            allDay: !hasExplicitTime,
         };
 
         setReminderEvents((prev) => [newReminder, ...prev]);
         setReminderForm({
             title: "",
             date: new Date().toISOString().slice(0, 10),
+            startTime: "",
+            endTime: "",
             notes: "",
         });
         setShowReminderForm(false);
@@ -304,7 +328,7 @@ const CalendarModule = () => {
     };
 
     return (
-        <div className="flex h-full min-h-0 min-w-0 overflow-hidden bg-slate-50">
+        <div className="flex h-full min-h-0 min-w-0 flex-col overflow-x-hidden bg-slate-50 lg:flex-row">
 
             {/* Sidebar */}
             <CalendarSidebar
@@ -318,7 +342,7 @@ const CalendarModule = () => {
             {/* Main Calendar Area */}
             <div className="flex-1 min-w-0 flex flex-col">
                 {/* Top Header */}
-                <div className="border-b border-slate-200 bg-white p-4 flex min-w-0 items-center justify-between">
+                <div className="flex min-w-0 flex-col gap-3 border-b border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-semibold text-slate-900">
                             {selectedDate.toLocaleDateString("en-US", {
@@ -327,7 +351,7 @@ const CalendarModule = () => {
                             })}
                         </h1>
                     </div>
-                    <div className="flex min-w-0 items-center gap-2 text-xs">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
                         <span className="rounded-full bg-purple-50 px-2 py-1 text-purple-700">Survey</span>
                         <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">Allocation</span>
                         <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">Approval</span>
@@ -343,7 +367,7 @@ const CalendarModule = () => {
                 </div>
 
                 {showReminderForm && (
-                    <form onSubmit={addPersonalReminder} className="mx-6 mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <form onSubmit={addPersonalReminder} className="mx-3 mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:mx-6">
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                             <input
                                 value={reminderForm.title}
@@ -360,10 +384,24 @@ const CalendarModule = () => {
                                 required
                             />
                             <input
+                                type="time"
+                                value={reminderForm.startTime}
+                                onChange={(event) => setReminderForm((prev) => ({ ...prev, startTime: event.target.value }))}
+                                className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                                placeholder="Start time (optional)"
+                            />
+                            <input
+                                type="time"
+                                value={reminderForm.endTime}
+                                onChange={(event) => setReminderForm((prev) => ({ ...prev, endTime: event.target.value }))}
+                                className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                                placeholder="End time (optional)"
+                            />
+                            <input
                                 value={reminderForm.notes}
                                 onChange={(event) => setReminderForm((prev) => ({ ...prev, notes: event.target.value }))}
                                 placeholder="Notes (optional)"
-                                className="md:col-span-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                                className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
                             />
                         </div>
                         <div className="mt-3 flex justify-end gap-2">
@@ -385,14 +423,14 @@ const CalendarModule = () => {
                 )}
 
                 {(loading || error) && (
-                    <div className="px-6 pt-3 text-xs">
+                    <div className="px-3 pt-3 text-xs sm:px-6">
                         {loading && <span className="text-slate-500">Loading calendar events...</span>}
                         {!loading && error && <span className="text-amber-600">{error}</span>}
                     </div>
                 )}
 
                 {/* View Controls */}
-                <div className="border-b border-slate-200 bg-white px-6 py-3 flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-6">
                     <div className="flex items-center gap-1 rounded-lg border border-slate-200 p-1">
                         {VIEW_OPTIONS.map((option) => (
                             <button
@@ -417,7 +455,7 @@ const CalendarModule = () => {
                 </div>
 
                 {/* Calendar Content */}
-                <div className="flex-1 min-w-0 flex flex-col overflow-hidden p-6">
+                <div className="flex-1 min-w-0 flex flex-col overflow-hidden p-3 sm:p-6">
                     {view === "day" && (
                         <DayView
                             date={selectedDate}

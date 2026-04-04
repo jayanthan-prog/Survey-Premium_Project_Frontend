@@ -131,7 +131,7 @@ const AuditLogsModule = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="max-w-full min-w-0 space-y-6 overflow-x-hidden">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-semibold text-gray-900">Audit Logs</h1>
@@ -186,18 +186,43 @@ const AuditLogsModule = () => {
                     Total Logs: <span className="font-semibold text-gray-700">{filteredLogs.length}</span>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[980px] text-left">
+                <div className="md:hidden divide-y divide-gray-100">
+                    {loading && <div className="px-4 py-8 text-sm text-gray-500">Loading audit logs...</div>}
+                    {!loading && error && <div className="px-4 py-8 text-sm text-rose-600">{error}</div>}
+                    {!loading && !error && filteredLogs.map((log) => (
+                        <div key={`${log.timestamp}-${log.entity}-${log.activity}`} className="space-y-2 px-4 py-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="text-sm font-semibold text-gray-900 break-words">{log.activity}</div>
+                                <span className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase ${toneByOutcome[log.outcome] || "bg-gray-100 text-gray-700"}`}>
+                                    {log.outcome}
+                                </span>
+                            </div>
+                            <div className="text-xs text-gray-600">{log.module} • {log.entity}</div>
+                            <div className="text-xs text-gray-500 break-words">{log.description}</div>
+                            <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-500">
+                                <div>Actor: <span className="text-gray-700">{log.actor}</span></div>
+                                <div>IP: <span className="text-gray-700">{log.ipAddress}</span></div>
+                                <div className="col-span-2">Time: <span className="text-gray-700">{log.timestamp}</span></div>
+                            </div>
+                        </div>
+                    ))}
+                    {!loading && !error && !filteredLogs.length && (
+                        <div className="px-4 py-8 text-sm text-gray-500">No audit logs found for the selected filters.</div>
+                    )}
+                </div>
+
+                <div className="hidden w-full min-w-0 overflow-x-auto md:block">
+                    <table className="w-full table-fixed text-left">
                         <thead className="bg-gray-50 border-b border-gray-100">
                             <tr>
-                                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Timestamp</th>
-                                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Module</th>
-                                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Activity</th>
-                                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Entity</th>
-                                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Description</th>
-                                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Actor</th>
-                                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">IP Address</th>
-                                <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Outcome</th>
+                                <th className="w-[14%] px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Timestamp</th>
+                                <th className="w-[10%] px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Module</th>
+                                <th className="w-[15%] px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Activity</th>
+                                <th className="w-[10%] px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Entity</th>
+                                <th className="w-[18%] px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Description</th>
+                                <th className="w-[12%] px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Actor</th>
+                                <th className="w-[9%] px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">IP Address</th>
+                                <th className="w-[8%] px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Outcome</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -219,11 +244,21 @@ const AuditLogsModule = () => {
                                 <tr key={`${log.timestamp}-${log.entity}-${log.activity}`} className="hover:bg-gray-50">
                                     <td className="px-4 py-3 text-xs text-gray-700 whitespace-nowrap">{log.timestamp}</td>
                                     <td className="px-4 py-3 text-sm font-medium text-gray-800 whitespace-nowrap">{log.module}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{log.activity}</td>
-                                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{log.entity}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-600 max-w-[380px]">{log.description}</td>
-                                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{log.actor}</td>
-                                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{log.ipAddress}</td>
+                                    <td className="px-4 py-3 text-sm text-gray-700">
+                                        <span className="block truncate" title={log.activity}>{log.activity}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-gray-500">
+                                        <span className="block truncate" title={log.entity}>{log.entity}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                        <span className="block truncate" title={log.description}>{log.description}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-gray-500">
+                                        <span className="block truncate" title={log.actor}>{log.actor}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-xs text-gray-500">
+                                        <span className="block truncate" title={log.ipAddress}>{log.ipAddress}</span>
+                                    </td>
                                     <td className="px-4 py-3 whitespace-nowrap">
                                         <span className={`px-2 py-1 rounded-md text-[10px] font-semibold uppercase ${toneByOutcome[log.outcome] || "bg-gray-100 text-gray-700"}`}>
                                             {log.outcome}

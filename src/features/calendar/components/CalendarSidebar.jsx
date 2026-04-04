@@ -16,7 +16,7 @@ const CalendarSidebar = ({
     onNext,
 }) => {
     return (
-        <div className="w-60 min-w-[240px] max-w-[280px] shrink-0 border-r border-slate-200 bg-white p-4 overflow-y-auto">
+        <div className="w-full shrink-0 border-b border-slate-200 bg-white p-4 lg:w-60 lg:min-w-[240px] lg:max-w-[280px] lg:border-b-0 lg:border-r lg:overflow-y-auto">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">
                 {selectedDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
             </h3>

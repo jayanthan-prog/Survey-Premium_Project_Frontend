@@ -70,6 +70,16 @@ const SurveyBuilderPage = () => {
                         value: String(group.name || ""),
                         id: Number(group.group_id),
                         label: group.type ? `${group.name} (${group.type})` : String(group.name || ""),
+                        memberUserIds: Array.from(
+                            new Set(
+                                [
+                                    ...(Array.isArray(group.participants) ? group.participants : []),
+                                    ...(Array.isArray(group.approvers) ? group.approvers : []),
+                                ]
+                                    .map((member) => Number(member?.user_id))
+                                    .filter((id) => Number.isInteger(id) && id > 0)
+                            )
+                        ),
                     }))
                 );
                 setUserOptions(

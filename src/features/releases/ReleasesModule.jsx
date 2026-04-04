@@ -196,7 +196,7 @@ const ReleasesModule = () => {
                             value={searchTerm}
                             onChange={(event) => setSearchTerm(event.target.value)}
                             placeholder="Search releases..."
-                            className="w-56 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 shadow-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                            className="w-full max-w-xs rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 shadow-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
                         />
                     </div>
                     <div className="divide-y divide-gray-100">
