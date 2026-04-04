@@ -519,6 +519,7 @@ export default function TakeSurveyPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (submitting || submitted) return;
 
         const parseValidation = (value) => {
             if (!value || typeof value !== "object") return {};
@@ -726,19 +727,39 @@ export default function TakeSurveyPage() {
             }
         }
 
+        if (!Object.keys(filteredAnswers).length) {
+            setError("Please answer at least one question before submitting.");
+            return;
+        }
+
         try {
             setSubmitting(true);
             setError("");
+
+            const participantsBeforeSubmit = await getSurveyParticipants();
+            const alreadySubmitted = (Array.isArray(participantsBeforeSubmit) ? participantsBeforeSubmit : []).some((entry) => (
+                Number(entry?.survey_id) === Number(id)
+                && Number(entry?.user_id) === Number(user?.user_id)
+                && String(entry?.status || "").toUpperCase() === "COMPLETED"
+            ));
+
+            if (alreadySubmitted) {
+                setSubmitted(true);
+                setTimeout(() => navigate("/student/surveys", { replace: true }), 1200);
+                return;
+            }
 
             await submitSurvey(id, { answers: filteredAnswers, otp: config.otpRequired ? otp : undefined });
             setSubmitted(true);
             setTimeout(() => navigate("/student/surveys", { replace: true }), 1200);
         } catch (err) {
             const message = err?.message || "Failed to submit survey.";
-            setError(message);
             if (String(message).toLowerCase().includes("already") || err?.status === 409) {
-                navigate("/student/surveys", { replace: true });
+                setSubmitted(true);
+                setTimeout(() => navigate("/student/surveys", { replace: true }), 1200);
+                return;
             }
+            setError(message);
         } finally {
             setSubmitting(false);
         }
