@@ -1,4 +1,4 @@
-import { apiRequest } from "./api";
+import { apiRequest, getApiBaseUrl } from "./api";
 
 const AUTH_STORAGE_KEY = "auth.session";
 
@@ -46,7 +46,7 @@ export const exportSurveyResponses = async (id, format = "csv", params = {}) => 
     const query = new URLSearchParams({ format: String(format || "csv") });
     if (params.search) query.set("search", String(params.search));
 
-    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:4000"}/api/surveys/${id}/responses/export?${query.toString()}`, {
+    const response = await fetch(`${getApiBaseUrl()}/api/surveys/${id}/responses/export?${query.toString()}`, {
         method: "GET",
         headers: {
             Authorization: token ? `Bearer ${token}` : "",

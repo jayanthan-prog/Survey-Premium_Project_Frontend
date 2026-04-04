@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || "http://localhost:4000").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL || "http://10.150.20.138:4000").replace(/\/$/, "");
 
 let publicIpPromise = null;
 

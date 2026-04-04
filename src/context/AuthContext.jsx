@@ -5,11 +5,32 @@ const AuthContext = createContext();
 
 const STORAGE_KEY = "auth.session";
 
+function isValidToken(token) {
+    const normalized = String(token || "").trim();
+    if (!normalized) return false;
+    if (["null", "undefined", "[object Object]"].includes(normalized)) return false;
+    return normalized.length >= 16;
+}
+
+function isSessionExpired(expiresAt) {
+    if (!expiresAt) return false;
+    const expiryDate = new Date(expiresAt);
+    if (Number.isNaN(expiryDate.getTime())) return false;
+    return expiryDate.getTime() <= Date.now();
+}
+
+function sanitizeSession(session) {
+    if (!session || typeof session !== "object") return null;
+    if (!isValidToken(session.token)) return null;
+    if (isSessionExpired(session.expiresAt)) return null;
+    return session;
+}
+
 function readStoredSession() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return null;
-        return JSON.parse(raw);
+        return sanitizeSession(JSON.parse(raw));
     } catch (err) {
         return null;
     }
@@ -45,7 +66,9 @@ export const AuthProvider = ({ children }) => {
         let isMounted = true;
 
         const bootstrap = async () => {
-            if (!session?.token) {
+            if (!isValidToken(session?.token) || isSessionExpired(session?.expiresAt)) {
+                setSession(null);
+                persistSession(null);
                 if (isMounted) setIsAuthLoading(false);
                 return;
             }
