@@ -1,0 +1,24 @@
+services:
+  nginx:
+    image: ${NGINX_IMAGE}:${IMAGE_TAG:-v1.0.0}
+    container_name: surrvey-nginx
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    networks:
+      - survey_net
+    depends_on:
+      - frontend
+
+  frontend:
+    container_name: survey-frontend
+    image: ${FRONTEND_IMAGE}:${IMAGE_TAG:-v1.0.0}
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+    networks:
+      - survey_net
+
+networks:
+  survey_net:
+    external: true
